@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Đăng nhập</h2>
+    <form method="post">
+        <div class="grid">
+            <div class="col-6"><label>Email</label><input name="email" type="email" required /></div>
+            <div class="col-6"><label>Mật khẩu</label><input name="password" type="password" required /></div>
+            <div class="col-12"><button class="btn" type="submit">Đăng nhập</button></div>
+        </div>
+    </form>
+    <div class="small">Chưa có tài khoản? <a href="{{ url_for('register') }}">Đăng ký</a></div>
+</div>
+{% endblock %}

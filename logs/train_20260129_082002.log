@@ -1,0 +1,19 @@
+2026-01-29 15:20:02,746 | INFO | Reading CSV: ./cars.csv
+2026-01-29 15:20:04,483 | INFO | Loaded rows: 762091
+2026-01-29 15:20:04,522 | INFO | Sampled rows (n=50000)
+2026-01-29 15:20:04,618 | INFO | FAST mode enabled: clf=120 reg=160 step=20
+2026-01-29 15:20:04,618 | INFO | Training RandomForestClassifier...
+2026-01-29 15:20:06,162 | INFO | === Accident classifier report ===
+              precision    recall  f1-score   support
+
+           0      0.797     0.927     0.857      7770
+           1      0.411     0.178     0.248      2230
+
+    accuracy                          0.760     10000
+   macro avg      0.604     0.552     0.553     10000
+weighted avg      0.711     0.760     0.721     10000
+
+2026-01-29 15:20:06,162 | INFO | Training RandomForestRegressor...
+2026-01-29 15:20:08,675 | INFO | Saved model package to: d:\Documents\DSS\models\car_advisor_rf.pkl
+2026-01-29 15:20:08,676 | INFO | Total elapsed: 00:00:05
+2026-01-29 15:20:08,676 | INFO | Log file: logs\train_20260129_082002.log

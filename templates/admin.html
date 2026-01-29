@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Admin</h2>
+    <div class="small">Quản lý user, tiêu chí, và retrain từ file CSV.</div>
+</div>
+
+<div class="card">
+    <h3>Retrain AI</h3>
+    <form method="post" action="{{ url_for('admin_retrain') }}" enctype="multipart/form-data">
+        <div class="grid">
+            <div class="col-6">
+                <label>Upload cars.csv mới (tuỳ chọn)</label>
+                <input type="file" name="csv_file" accept=".csv" />
+            </div>
+            <div class="col-6">
+                <label>Ghi chú</label>
+                <input type="text" name="note" placeholder="vd: cập nhật dữ liệu tháng 1" />
+            </div>
+            <div class="col-12"><button class="btn" type="submit">Retrain</button></div>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Tiêu chí & trọng số mặc định</h3>
+    <form method="post" action="{{ url_for('admin_update_criteria') }}">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Tiêu chí</th>
+                    <th>Direction</th>
+                    <th>Weight (1-9)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in criteria %}
+                <tr>
+                    <td>{{ c.label }}</td>
+                    <td>{{ c.direction }}</td>
+                    <td style="max-width:160px">
+                        <input type="number" min="1" max="9" name="w_{{ c.key }}" value="{{ c.default_weight }}"
+                            required />
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <button class="btn" type="submit">Lưu trọng số</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Người dùng</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Hành động</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td>{{ u.email }}</td>
+                <td>{{ u.role }}</td>
+                <td>
+                    {% if u.role != 'admin' %}
+                    <form method="post" action="{{ url_for('admin_make_admin', user_id=u.id) }}" style="display:inline">
+                        <button class="btn secondary" type="submit">Set admin</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

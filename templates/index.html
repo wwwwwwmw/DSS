@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Tư vấn mua xe (AHP + ML)</h2>
+    <div class="small">Nhập tối thiểu 3 xe để hệ thống xếp hạng và gợi ý phương án.</div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('recommend') }}">
+        <h3>1) Chấm điểm mức độ quan trọng (1-9)</h3>
+        <div class="grid">
+            {% for c in criteria %}
+            <div class="col-3">
+                <label>{{ c.label }}</label>
+                <input type="number" min="1" max="9" name="w_{{ c.key }}" value="{{ c.default }}" required />
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3>2) Thông tin xe (tối thiểu 3)</h3>
+        <div class="small">Mẹo: MPG có thể để trống. Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.
+        </div>
+
+        <div class="flash danger client-errors" style="display:none"></div>
+
+        <div data-car-form="1" data-min="3">
+            <div class="actions" style="margin:10px 0;">
+                <div class="small">Thêm/xoá xe tuỳ ý. Hệ thống vẫn bỏ qua xe để trống.</div>
+                <button class="btn secondary btn-add-car" type="button">+ Thêm xe</button>
+            </div>
+
+            <div class="car-list">
+                {% for i in range(0, 3) %}
+                <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe #{{ i+1 }}</b>
+                        <button class="btn danger btn-remove-car" type="button">Xóa</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-4"><label>Price (Giá bán) *</label><input name="car{{i}}_price" type="number"
+                                step="1" placeholder="15000" /></div>
+                        <div class="col-4"><label>Mileage (Số dặm) *</label><input name="car{{i}}_mileage" type="number"
+                                step="1" placeholder="60000" /></div>
+                        <div class="col-4"><label>Year (Năm SX) *</label><input name="car{{i}}_year" type="number"
+                                step="1" placeholder="2018" /></div>
+
+                        <div class="col-4"><label>Accidents/Damage (0/1) *</label><input
+                                name="car{{i}}_accidents_or_damage" type="number" min="0" max="1" step="1"
+                                placeholder="0" /></div>
+                        <div class="col-4"><label>One owner (0/1) *</label><input name="car{{i}}_one_owner"
+                                type="number" min="0" max="1" step="1" placeholder="1" /></div>
+                        <div class="col-4"><label>MPG</label><input name="car{{i}}_mpg" type="text"
+                                placeholder="30 hoặc 39-38" /></div>
+
+                        <div class="col-4"><label>Driver rating (0-5)</label><input name="car{{i}}_driver_rating"
+                                type="number" step="0.1" placeholder="4.5" /></div>
+                        <div class="col-4"><label>Seller rating (0-5)</label><input name="car{{i}}_seller_rating"
+                                type="number" step="0.1" placeholder="4.7" /></div>
+                        <div class="col-4"><label>Price drop</label><input name="car{{i}}_price_drop" type="number"
+                                step="1" placeholder="500" /></div>
+                    </div>
+                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <template>
+                <div class="card car-card" data-prefix="car" data-index="__INDEX__" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe</b>
+                        <button class="btn danger btn-remove-car" type="button">Xóa</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-4"><label>Price (Giá bán) *</label><input name="car__INDEX___price"
+                                type="number" step="1" placeholder="15000" /></div>
+                        <div class="col-4"><label>Mileage (Số dặm) *</label><input name="car__INDEX___mileage"
+                                type="number" step="1" placeholder="60000" /></div>
+                        <div class="col-4"><label>Year (Năm SX) *</label><input name="car__INDEX___year" type="number"
+                                step="1" placeholder="2018" /></div>
+
+                        <div class="col-4"><label>Accidents/Damage (0/1) *</label><input
+                                name="car__INDEX___accidents_or_damage" type="number" min="0" max="1" step="1"
+                                placeholder="0" /></div>
+                        <div class="col-4"><label>One owner (0/1) *</label><input name="car__INDEX___one_owner"
+                                type="number" min="0" max="1" step="1" placeholder="1" /></div>
+                        <div class="col-4"><label>MPG</label><input name="car__INDEX___mpg" type="text"
+                                placeholder="30 hoặc 39-38" /></div>
+
+                        <div class="col-4"><label>Driver rating (0-5)</label><input name="car__INDEX___driver_rating"
+                                type="number" step="0.1" placeholder="4.5" /></div>
+                        <div class="col-4"><label>Seller rating (0-5)</label><input name="car__INDEX___seller_rating"
+                                type="number" step="0.1" placeholder="4.7" /></div>
+                        <div class="col-4"><label>Price drop</label><input name="car__INDEX___price_drop" type="number"
+                                step="1" placeholder="500" /></div>
+                    </div>
+                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
+                </div>
+            </template>
+        </div>
+
+        <button class="btn" type="submit">Tính điểm & Gợi ý</button>
+    </form>
+</div>
+
+{% if results %}
+<div class="card">
+    <h3>Kết quả</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Phương án</th>
+                <th>AHP score</th>
+                <th>Rủi ro tai nạn (ML)</th>
+                <th>Chi phí bảo dưỡng (ML)</th>
+                <th>Gợi ý</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in results %}
+            <tr>
+                <td>{{ r.idx }}</td>
+                <td>
+                    <span class="badge {{ r.badge }}">{{ r.option }}</span>
+                </td>
+                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
+                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
+                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td>{{ r.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if top_recommendations %}
+    <h4>Top đề xuất</h4>
+    <div class="small">Chỉ hiển thị phương án xanh.</div>
+    <ul>
+        {% for r in top_recommendations %}
+        <li>Xe #{{ r.idx }} — {{ r.message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

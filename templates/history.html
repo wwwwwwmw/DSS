@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Lịch sử tư vấn</h2>
+    <div class="small">Chỉ hiển thị cho người dùng đã đăng nhập.</div>
+</div>
+
+<div class="card">
+    {% if items %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Thời gian</th>
+                <th>Số xe</th>
+                <th>Tóm tắt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for it in items %}
+            <tr>
+                <td>{{ it.created_at }}</td>
+                <td>{{ it.car_count }}</td>
+                <td>{{ it.summary }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="small">Chưa có dữ liệu.</div>
+    {% endif %}
+</div>
+{% endblock %}

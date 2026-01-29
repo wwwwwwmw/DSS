@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>So sánh xe</h2>
+    <div class="small">Nhập tối thiểu 2 xe. Hệ thống sẽ tô nổi bật chỉ số tốt nhất theo từng tiêu chí.</div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('compare') }}">
+        <div class="flash danger client-errors" style="display:none"></div>
+
+        <div data-car-form="1" data-min="2">
+            <div class="actions" style="margin:10px 0;">
+                <div class="small">Thêm/xoá xe tuỳ ý. Hệ thống vẫn bỏ qua xe để trống.</div>
+                <button class="btn secondary btn-add-car" type="button">+ Thêm xe</button>
+            </div>
+
+            <div class="car-list">
+                {% for i in range(0, 2) %}
+                <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe #{{ i+1 }}</b>
+                        <button class="btn danger btn-remove-car" type="button">Xóa</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-4"><label>Price *</label><input name="car{{i}}_price" type="number" step="1"
+                                placeholder="15000" /></div>
+                        <div class="col-4"><label>Mileage *</label><input name="car{{i}}_mileage" type="number" step="1"
+                                placeholder="60000" /></div>
+                        <div class="col-4"><label>Year *</label><input name="car{{i}}_year" type="number" step="1"
+                                placeholder="2018" /></div>
+                        <div class="col-4"><label>Accidents/Damage (0/1) *</label><input
+                                name="car{{i}}_accidents_or_damage" type="number" min="0" max="1" step="1"
+                                placeholder="0" /></div>
+                        <div class="col-4"><label>One owner (0/1) *</label><input name="car{{i}}_one_owner"
+                                type="number" min="0" max="1" step="1" placeholder="1" /></div>
+                        <div class="col-4"><label>MPG</label><input name="car{{i}}_mpg" type="text"
+                                placeholder="30 hoặc 39-38" /></div>
+                        <div class="col-4"><label>Driver rating (0-5)</label><input name="car{{i}}_driver_rating"
+                                type="number" step="0.1" placeholder="4.5" /></div>
+                        <div class="col-4"><label>Seller rating (0-5)</label><input name="car{{i}}_seller_rating"
+                                type="number" step="0.1" placeholder="4.7" /></div>
+                        <div class="col-4"><label>Price drop</label><input name="car{{i}}_price_drop" type="number"
+                                step="1" placeholder="500" /></div>
+                    </div>
+                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <template>
+                <div class="card car-card" data-prefix="car" data-index="__INDEX__" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe</b>
+                        <button class="btn danger btn-remove-car" type="button">Xóa</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-4"><label>Price *</label><input name="car__INDEX___price" type="number" step="1"
+                                placeholder="15000" /></div>
+                        <div class="col-4"><label>Mileage *</label><input name="car__INDEX___mileage" type="number"
+                                step="1" placeholder="60000" /></div>
+                        <div class="col-4"><label>Year *</label><input name="car__INDEX___year" type="number" step="1"
+                                placeholder="2018" /></div>
+                        <div class="col-4"><label>Accidents/Damage (0/1) *</label><input
+                                name="car__INDEX___accidents_or_damage" type="number" min="0" max="1" step="1"
+                                placeholder="0" /></div>
+                        <div class="col-4"><label>One owner (0/1) *</label><input name="car__INDEX___one_owner"
+                                type="number" min="0" max="1" step="1" placeholder="1" /></div>
+                        <div class="col-4"><label>MPG</label><input name="car__INDEX___mpg" type="text"
+                                placeholder="30 hoặc 39-38" /></div>
+                        <div class="col-4"><label>Driver rating (0-5)</label><input name="car__INDEX___driver_rating"
+                                type="number" step="0.1" placeholder="4.5" /></div>
+                        <div class="col-4"><label>Seller rating (0-5)</label><input name="car__INDEX___seller_rating"
+                                type="number" step="0.1" placeholder="4.7" /></div>
+                        <div class="col-4"><label>Price drop</label><input name="car__INDEX___price_drop" type="number"
+                                step="1" placeholder="500" /></div>
+                    </div>
+                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
+                </div>
+            </template>
+        </div>
+        <button class="btn" type="submit">So sánh</button>
+    </form>
+</div>
+
+{% if rows %}
+<div class="card">
+    <h3>Kết quả so sánh</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Tiêu chí</th>
+                {% for c in cars %}
+                <th>Xe #{{ loop.index }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>{{ row.label }}</td>
+                {% for cell in row.cells %}
+                <td>{% if cell.best %}<span class="best">{{ cell.value }}</span>{% else %}{{ cell.value }}{% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}
