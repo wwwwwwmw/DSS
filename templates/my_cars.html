@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Xe của tôi</h2>
+    <div class="small">Danh sách xe bạn đã lưu. Bạn có thể đổi tên / chỉnh sửa / xóa.</div>
+</div>
+
+<div class="card">
+    {% if items %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Thời gian</th>
+                <th>Nguồn</th>
+                <th>Xe</th>
+                <th>Năm</th>
+                <th>Giá</th>
+                <th>Mileage</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for it in items %}
+            <tr>
+                <td>{{ it.created_at }}</td>
+                <td>{{ it.source }}</td>
+                <td>{{ it.title }}</td>
+                <td>{{ it.car.year if it.car is mapping else '' }}</td>
+                <td>{{ it.car.price if it.car is mapping else '' }}</td>
+                <td>{{ it.car.mileage if it.car is mapping else '' }}</td>
+                <td>
+                    <a class="btn secondary" href="{{ url_for('my_car_detail', item_id=it.id) }}">Chi tiết</a>
+                    <a class="btn secondary" href="{{ url_for('my_car_edit', item_id=it.id) }}">Sửa</a>
+                    <form method="post" action="{{ url_for('delete_my_car', item_id=it.id) }}" style="display:inline">
+                        <button class="btn danger" type="submit">Xóa</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <details style="margin-top:10px;">
+        <summary class="small">Xem dữ liệu thô (JSON)</summary>
+        <pre style="white-space:pre-wrap">{{ items|tojson(indent=2) }}</pre>
+    </details>
+    {% else %}
+    <div class="small">Chưa có xe nào được lưu.</div>
+    {% endif %}
+</div>
+{% endblock %}

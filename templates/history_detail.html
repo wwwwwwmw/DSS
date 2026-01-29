@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Chi tiết lịch sử</h2>
+    <div class="small">
+        <div><b>Thời gian:</b> {{ item.created_at }}</div>
+        <div><b>Số xe:</b> {{ item.car_count }}</div>
+        <div><b>Tóm tắt:</b> {{ item.summary }}</div>
+        <div><b>Loại:</b> {{ payload.action or 'unknown' }}</div>
+    </div>
+
+    <div class="actions" style="margin-top:10px;">
+        <a class="btn secondary" href="{{ url_for('history') }}">Quay lại</a>
+        <form method="post" action="{{ url_for('history_delete', item_id=item.id) }}" style="display:inline">
+            <button class="btn danger" type="submit">Xóa</button>
+        </form>
+    </div>
+</div>
+
+{% if payload.weights %}
+<div class="card">
+    <h3>Trọng số tiêu chí</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Tiêu chí</th>
+                <th>Giá trị</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for k, v in payload.weights.items() %}
+            <tr>
+                <td>{{ k }}</td>
+                <td>{{ v }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if payload.cars %}
+<div class="card">
+    <h3>Thông tin xe</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Price</th>
+                <th>Mileage</th>
+                <th>Year</th>
+                <th>Accidents</th>
+                <th>One owner</th>
+                <th>MPG</th>
+                <th>Driver rating</th>
+                <th>Seller rating</th>
+                <th>Price drop</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in payload.cars %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ c.price }}</td>
+                <td>{{ c.mileage }}</td>
+                <td>{{ c.year }}</td>
+                <td>{{ c.accidents_or_damage }}</td>
+                <td>{{ c.one_owner }}</td>
+                <td>{{ c.mpg }}</td>
+                <td>{{ c.driver_rating }}</td>
+                <td>{{ c.seller_rating }}</td>
+                <td>{{ c.price_drop }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if payload.results %}
+<div class="card">
+    <h3>Kết quả</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>AHP</th>
+                <th>Rủi ro tai nạn</th>
+                <th>Bảo dưỡng</th>
+                <th>Phương án</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in payload.results %}
+            <tr>
+                <td>{{ r.idx or loop.index }}</td>
+                <td>{{ r.ahp_score }}</td>
+                <td>{{ r.accident_risk_pct }}%</td>
+                <td>{{ r.maintenance_monthly }} /tháng</td>
+                <td>{{ r.option or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if payload.rows %}
+<div class="card">
+    <h3>Bảng so sánh</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Tiêu chí</th>
+                {% if payload.cars %}
+                {% for _ in payload.cars %}
+                <th>Xe #{{ loop.index }}</th>
+                {% endfor %}
+                {% else %}
+                <th>Giá trị</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in payload.rows %}
+            <tr>
+                <td>{{ row.label }}</td>
+                {% for cell in row.cells %}
+                <td>{% if cell.best %}<span class="best">{{ cell.value }}</span>{% else %}{{ cell.value }}{% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <details>
+        <summary class="small">Xem payload (JSON)</summary>
+        <pre style="white-space:pre-wrap">{{ payload|tojson(indent=2) }}</pre>
+    </details>
+</div>
+{% endblock %}

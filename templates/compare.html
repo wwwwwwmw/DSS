@@ -10,6 +10,16 @@
         <div class="flash danger client-errors" style="display:none"></div>
 
         <div data-car-form="1" data-min="2">
+            {% if current_user.is_authenticated %}
+            <div class="card saved-import" style="margin:10px 0;">
+                <div class="small"><b>Chọn từ “Xe của tôi”</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
+                    ảnh hưởng dữ liệu đã lưu).</div>
+                <div class="actions" style="margin-top:8px;">
+                    <select class="saved-car-select" style="min-width:260px"></select>
+                    <button class="btn secondary btn-import-saved" type="button">Thêm vào danh sách</button>
+                </div>
+            </div>
+            {% endif %}
             <div class="actions" style="margin:10px 0;">
                 <div class="small">Thêm/xoá xe tuỳ ý. Hệ thống vẫn bỏ qua xe để trống.</div>
                 <button class="btn secondary btn-add-car" type="button">+ Thêm xe</button>
@@ -107,6 +117,22 @@
             {% endfor %}
         </tbody>
     </table>
+
+    {% if current_user.is_authenticated and cars %}
+    <div class="actions" style="margin-top:12px;">
+        <div class="small">Lưu từng xe để dùng lại ở các mục khác.</div>
+    </div>
+    <div class="actions" style="margin-top:10px; gap:12px; justify-content:flex-start; flex-wrap:wrap;">
+        {% for c in cars %}
+        <form method="post" action="{{ url_for('save_my_cars') }}" style="display:inline">
+            <input type="hidden" name="source" value="manual" />
+            <input type="hidden" name="title" value="Xe so sánh #{{ loop.index }}" />
+            <textarea name="car_json" style="display:none">{{ c|tojson }}</textarea>
+            <button class="btn secondary" type="submit">Lưu xe #{{ loop.index }}</button>
+        </form>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}

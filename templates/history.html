@@ -13,6 +13,7 @@
                 <th>Thời gian</th>
                 <th>Số xe</th>
                 <th>Tóm tắt</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -21,6 +22,15 @@
                 <td>{{ it.created_at }}</td>
                 <td>{{ it.car_count }}</td>
                 <td>{{ it.summary }}</td>
+                <td>
+                    <div class="actions">
+                        <a class="btn secondary" href="{{ url_for('history_detail', item_id=it.id) }}">Chi tiết</a>
+                        <form method="post" action="{{ url_for('history_delete', item_id=it.id) }}"
+                            style="display:inline">
+                            <button class="btn danger" type="submit">Xóa</button>
+                        </form>
+                    </div>
+                </td>
             </tr>
             {% endfor %}
         </tbody>

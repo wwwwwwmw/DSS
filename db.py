@@ -12,7 +12,13 @@ class Base(DeclarativeBase):
 
 def create_session_factory(database_url: str):
     engine = create_engine(database_url, future=True)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    SessionLocal = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+        expire_on_commit=False,
+    )
     return engine, SessionLocal
 
 

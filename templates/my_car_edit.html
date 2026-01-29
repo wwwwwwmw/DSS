@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Chỉnh sửa xe đã lưu</h2>
+    <div class="small">
+        <div><b>Thời gian:</b> {{ item.created_at }}</div>
+        <div><b>Nguồn:</b> {{ item.source }}</div>
+    </div>
+
+    <div class="actions" style="margin-top:10px;">
+        <a class="btn secondary" href="{{ url_for('my_car_detail', item_id=item.id) }}">Quay lại</a>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('my_car_edit', item_id=item.id) }}">
+        <h3>1) Đổi tên (tuỳ chọn)</h3>
+        <div class="grid">
+            <div class="col-6">
+                <label>Tiêu đề</label>
+                <input name="title" value="{{ item.title }}" placeholder="vd: Xe đi làm - Toyota 2019" />
+            </div>
+        </div>
+
+        <h3 style="margin-top:14px;">2) Thông tin xe</h3>
+        <div class="small">Các trường có dấu * là bắt buộc.</div>
+
+        <div data-car-form="1" data-min="1">
+            <div class="car-list">
+                <div class="card car-card" data-prefix="car" data-index="0" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe</b>
+                        <span class="small">(chỉ sửa 1 xe)</span>
+                    </div>
+                    <div class="grid">
+                        <div class="col-3"><label>price*</label><input name="car0_price" value="{{ car.price }}" />
+                        </div>
+                        <div class="col-3"><label>mileage*</label><input name="car0_mileage"
+                                value="{{ car.mileage }}" /></div>
+                        <div class="col-3"><label>year*</label><input name="car0_year" value="{{ car.year }}" /></div>
+                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
+                                name="car0_accidents_or_damage" value="{{ car.accidents_or_damage }}" /></div>
+                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car0_one_owner"
+                                value="{{ car.one_owner }}" /></div>
+                        <div class="col-3"><label>mpg</label><input name="car0_mpg" value="{{ car.mpg }}" /></div>
+                        <div class="col-3"><label>driver_rating</label><input name="car0_driver_rating"
+                                value="{{ car.driver_rating }}" /></div>
+                        <div class="col-3"><label>seller_rating</label><input name="car0_seller_rating"
+                                value="{{ car.seller_rating }}" /></div>
+                        <div class="col-3"><label>price_drop</label><input name="car0_price_drop"
+                                value="{{ car.price_drop }}" /></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn" type="submit">Lưu thay đổi</button>
+    </form>
+</div>
+{% endblock %}

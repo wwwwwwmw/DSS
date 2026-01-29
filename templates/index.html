@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
     <h2>Tư vấn mua xe (AHP + ML)</h2>
-    <div class="small">Nhập tối thiểu 3 xe để hệ thống xếp hạng và gợi ý phương án.</div>
+    <div class="small">Nhập tối thiểu 2 xe để hệ thống xếp hạng và gợi ý phương án.</div>
 </div>
 
 <div class="card">
@@ -17,20 +17,30 @@
             {% endfor %}
         </div>
 
-        <h3>2) Thông tin xe (tối thiểu 3)</h3>
+        <h3>2) Thông tin xe (tối thiểu 2)</h3>
         <div class="small">Mẹo: MPG có thể để trống. Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.
         </div>
 
         <div class="flash danger client-errors" style="display:none"></div>
 
-        <div data-car-form="1" data-min="3">
+        <div data-car-form="1" data-min="2">
+            {% if current_user.is_authenticated %}
+            <div class="card saved-import" style="margin:10px 0;">
+                <div class="small"><b>Chọn từ “Xe của tôi”</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
+                    ảnh hưởng dữ liệu đã lưu).</div>
+                <div class="actions" style="margin-top:8px;">
+                    <select class="saved-car-select" style="min-width:260px"></select>
+                    <button class="btn secondary btn-import-saved" type="button">Thêm vào danh sách</button>
+                </div>
+            </div>
+            {% endif %}
             <div class="actions" style="margin:10px 0;">
                 <div class="small">Thêm/xoá xe tuỳ ý. Hệ thống vẫn bỏ qua xe để trống.</div>
                 <button class="btn secondary btn-add-car" type="button">+ Thêm xe</button>
             </div>
 
             <div class="car-list">
-                {% for i in range(0, 3) %}
+                {% for i in range(0, 2) %}
                 <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
                     <div class="actions">
                         <b class="car-title">Xe #{{ i+1 }}</b>
@@ -114,6 +124,7 @@
                 <th>Rủi ro tai nạn (ML)</th>
                 <th>Chi phí bảo dưỡng (ML)</th>
                 <th>Gợi ý</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -127,6 +138,18 @@
                 <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
                 <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
                 <td>{{ r.message }}</td>
+                <td>
+                    {% if current_user.is_authenticated and cars %}
+                    <form method="post" action="{{ url_for('save_my_cars') }}">
+                        <input type="hidden" name="source" value="manual" />
+                        <input type="hidden" name="title" value="Xe #{{ r.idx }}" />
+                        <textarea name="car_json" style="display:none">{{ cars[r.idx-1]|tojson }}</textarea>
+                        <button class="btn secondary" type="submit">Lưu</button>
+                    </form>
+                    {% else %}
+                    <a class="btn secondary" href="{{ url_for('login') }}">Đăng nhập</a>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

@@ -71,6 +71,8 @@
 
         list.appendChild(card);
         renumberCards(container);
+
+        return card;
     }
 
     function removeCar(container, card) {
@@ -200,7 +202,121 @@
         }
     }
 
+    async function fetchJson(url) {
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(`HTTP ${res.status} ${text}`);
+        }
+        return await res.json();
+    }
+
+    function normalize01Js(v) {
+        if (v === null || v === undefined) return "";
+        if (typeof v === "boolean") return v ? "1" : "0";
+        const s = String(v).trim().toLowerCase();
+        if (!s) return "";
+        if (s === "1" || s === "1.0") return "1";
+        if (s === "0" || s === "0.0") return "0";
+        if (s === "true" || s === "t" || s === "yes" || s === "y") return "1";
+        if (s === "false" || s === "f" || s === "no" || s === "n") return "0";
+        const n = Number(s);
+        if (Number.isFinite(n)) {
+            if (Math.abs(n - 1) < 1e-9) return "1";
+            if (Math.abs(n - 0) < 1e-9) return "0";
+        }
+        return s;
+    }
+
+    function fillCardFromCar(card, car) {
+        const prefix = card.getAttribute("data-prefix") || "car";
+        const index = card.getAttribute("data-index");
+        const set = (field, value) => {
+            const el = qs(card, `[name='${prefix}${index}_${field}']`);
+            if (!el) return;
+            el.value = value === null || value === undefined ? "" : String(value);
+        };
+
+        set("price", car.price ?? "");
+        set("mileage", car.mileage ?? "");
+        set("year", car.year ?? "");
+        set("accidents_or_damage", normalize01Js(car.accidents_or_damage));
+        set("one_owner", normalize01Js(car.one_owner));
+        set("mpg", car.mpg ?? "");
+        set("driver_rating", car.driver_rating ?? "");
+        set("seller_rating", car.seller_rating ?? "");
+        set("price_drop", car.price_drop ?? "");
+    }
+
+    function getTargetCard(container) {
+        const list = qs(container, ".car-list");
+        const cards = list ? qsa(list, ".car-card") : [];
+        const empty = cards.find(c => !anyFieldFilled(c));
+        if (empty) return empty;
+        const newCard = addCar(container);
+        return newCard || (list ? list.lastElementChild : null);
+    }
+
+    function initSavedImport(container) {
+        const box = qs(container, ".saved-import");
+        if (!box) return;
+
+        const select = qs(box, ".saved-car-select");
+        const btn = qs(box, ".btn-import-saved");
+        if (!select || !btn) return;
+
+        let loaded = false;
+        let loading = false;
+
+        async function loadList() {
+            if (loaded || loading) return;
+            loading = true;
+            try {
+                const data = await fetchJson("/api/my-cars");
+                const items = (data && data.items) ? data.items : [];
+                select.innerHTML = "";
+                const opt0 = document.createElement("option");
+                opt0.value = "";
+                opt0.textContent = "— Chọn xe —";
+                select.appendChild(opt0);
+                for (const it of items) {
+                    const opt = document.createElement("option");
+                    opt.value = String(it.id);
+                    const meta = it.created_at ? ` • ${it.created_at}` : "";
+                    opt.textContent = `${it.title || ('Xe #' + it.id)}${meta}`;
+                    select.appendChild(opt);
+                }
+                loaded = true;
+            } catch (e) {
+                console.warn("Failed to load saved cars", e);
+            } finally {
+                loading = false;
+            }
+        }
+
+        // load on focus to avoid unnecessary call
+        select.addEventListener("focus", loadList);
+        btn.addEventListener("click", async () => {
+            await loadList();
+            const id = String(select.value || "").trim();
+            if (!id) return;
+            try {
+                const data = await fetchJson(`/api/my-cars/${encodeURIComponent(id)}`);
+                const car = (data && data.car) ? data.car : null;
+                if (!car) return;
+                const target = getTargetCard(container);
+                if (!target) return;
+                fillCardFromCar(target, car);
+            } catch (e) {
+                console.warn("Failed to import saved car", e);
+            }
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
-        qsa(document, "[data-car-form='1']").forEach(initCarForm);
+        qsa(document, "[data-car-form='1']").forEach((c) => {
+            initCarForm(c);
+            initSavedImport(c);
+        });
     });
 })();

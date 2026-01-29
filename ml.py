@@ -123,6 +123,63 @@ def ahp_score(cars: List[Dict[str, Any]], weights: Dict[str, float]) -> List[flo
     return scores
 
 
+def parse_mpg_series(s):
+    import pandas as pd  # lazy import
+
+    if s is None:
+        return s
+    ss = s.astype(str).str.strip()
+    ss = ss.replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+
+    # Extract either a single number or a range a-b
+    m = ss.str.extract(r"^(?P<a>\d+(?:\.\d+)?)(?:\s*[-–]\s*(?P<b>\d+(?:\.\d+)?))?$")
+    a = pd.to_numeric(m["a"], errors="coerce")
+    b = pd.to_numeric(m["b"], errors="coerce")
+    out = a.where(b.isna(), (a + b) / 2.0)
+    return out
+
+
+def ahp_score_dataframe(df, weights: Dict[str, float]):
+    import pandas as pd  # lazy import
+
+    ws = normalize_weights(weights)
+    score = pd.Series(0.0, index=df.index)
+
+    for c in CRITERIA:
+        key = c["key"]
+        direction = c["direction"]
+        w = float(ws.get(key, 0.0))
+        if w <= 0:
+            continue
+
+        col = df.get(key)
+        if col is None:
+            continue
+
+        if key == "mpg":
+            x = parse_mpg_series(col)
+        else:
+            x = pd.to_numeric(col, errors="coerce")
+
+        xs = x.dropna()
+        if xs.empty:
+            scaled = pd.Series(0.0, index=df.index)
+        else:
+            lo = float(xs.min())
+            hi = float(xs.max())
+            if abs(hi - lo) < 1e-12:
+                scaled = pd.Series(0.0, index=df.index)
+                scaled.loc[x.notna()] = 0.5
+            else:
+                t = (x - lo) / (hi - lo)
+                scaled = (1.0 - t) if direction == "cost" else t
+                scaled = scaled.fillna(0.0)
+
+        score = score + (w * scaled)
+
+    return score
+
+
 def predict(models: LoadedModels, cars: List[Dict[str, Any]]) -> Tuple[List[float], List[float]]:
     # Build a minimal feature set. Categorical features are not required for the UI input.
     # Training will create the same columns; missing columns will be handled by the preprocessor.
@@ -134,10 +191,10 @@ def predict(models: LoadedModels, cars: List[Dict[str, Any]]) -> Tuple[List[floa
                 "mileage": _to_float(car.get("mileage")),
                 "mpg": parse_mpg(car.get("mpg")),
                 "one_owner": _to_float(car.get("one_owner")),
-                "personal_use_only": 1.0,
+                "personal_use_only": _to_float(car.get("personal_use_only")) if car.get("personal_use_only") is not None else 1.0,
                 "seller_rating": _to_float(car.get("seller_rating")),
                 "driver_rating": _to_float(car.get("driver_rating")),
-                "driver_reviews_num": 0.0,
+                "driver_reviews_num": _to_float(car.get("driver_reviews_num")) if car.get("driver_reviews_num") is not None else 0.0,
                 "price_drop": _to_float(car.get("price_drop")),
                 "price": _to_float(car.get("price")),
             }

@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Đánh giá xe ngoài (tối thiểu 1 xe)</h2>
+    <div class="small">Bạn có thể nhập 1 xe (ngoài kho) và chọn <b>So sánh với xe trong kho</b> để xem xe của bạn đang
+        ở mức nào so với dataset.</div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('evaluate') }}">
+        <h3>1) Trọng số tiêu chí (1-9)</h3>
+        <div class="grid">
+            {% for c in criteria %}
+            <div class="col-3">
+                <label>{{ c.label }}</label>
+                <input type="number" min="1" max="9" name="w_{{ c.key }}"
+                    value="{{ (weights[c.key] if weights else c.default) }}" required />
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3>2) Thông tin xe (tối thiểu 1)</h3>
+        <div class="small">Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.</div>
+
+        <div class="flash danger client-errors" style="display:none"></div>
+
+        <div data-car-form="1" data-min="1">
+            <div class="card saved-import" style="margin:10px 0;">
+                <div class="small"><b>Chọn từ “Xe của tôi”</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
+                    ảnh
+                    hưởng dữ liệu đã lưu).</div>
+                <div class="actions" style="margin-top:8px;">
+                    <select class="saved-car-select" style="min-width:260px"></select>
+                    <button class="btn secondary btn-import-saved" type="button">Đổ vào form</button>
+                </div>
+            </div>
+
+            <div class="actions" style="margin:10px 0;">
+                <div class="small">Bạn có thể thêm nhiều xe, nhưng tối thiểu 1 xe là đủ.</div>
+                <button class="btn secondary btn-add-car" type="button">+ Thêm xe</button>
+            </div>
+
+            <div class="car-list">
+                {% if cars %}
+                {% for i in range(0, cars|length) %}
+                <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe #{{ i+1 }}</b>
+                        <button class="btn danger btn-remove-car" type="button">Xoá</button>
+                    </div>
+
+                    <div class="grid">
+                        <div class="col-3"><label>price*</label><input name="car{{ i }}_price"
+                                value="{{ cars[i].price }}" placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>mileage*</label><input name="car{{ i }}_mileage"
+                                value="{{ cars[i].mileage }}" placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>year*</label><input name="car{{ i }}_year" value="{{ cars[i].year }}"
+                                placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
+                                name="car{{ i }}_accidents_or_damage" value="{{ cars[i].accidents_or_damage }}"
+                                placeholder="0 hoặc 1" /></div>
+                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car{{ i }}_one_owner"
+                                value="{{ cars[i].one_owner }}" placeholder="0 hoặc 1" /></div>
+                        <div class="col-3"><label>mpg</label><input name="car{{ i }}_mpg" value="{{ cars[i].mpg }}"
+                                placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>driver_rating</label><input name="car{{ i }}_driver_rating"
+                                value="{{ cars[i].driver_rating }}" placeholder="0-5" /></div>
+                        <div class="col-3"><label>seller_rating</label><input name="car{{ i }}_seller_rating"
+                                value="{{ cars[i].seller_rating }}" placeholder="0-5" /></div>
+                        <div class="col-3"><label>price_drop</label><input name="car{{ i }}_price_drop"
+                                value="{{ cars[i].price_drop }}" placeholder="vd: 500" /></div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="card car-card" data-prefix="car" data-index="0" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe #1</b>
+                        <button class="btn danger btn-remove-car" type="button">Xoá</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-3"><label>price*</label><input name="car0_price" placeholder="vd: 24000" />
+                        </div>
+                        <div class="col-3"><label>mileage*</label><input name="car0_mileage" placeholder="vd: 52000" />
+                        </div>
+                        <div class="col-3"><label>year*</label><input name="car0_year" placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
+                                name="car0_accidents_or_damage" placeholder="0 hoặc 1" /></div>
+                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car0_one_owner"
+                                placeholder="0 hoặc 1" /></div>
+                        <div class="col-3"><label>mpg</label><input name="car0_mpg" placeholder="vd: 30 hoặc 39-38" />
+                        </div>
+                        <div class="col-3"><label>driver_rating</label><input name="car0_driver_rating"
+                                placeholder="0-5" /></div>
+                        <div class="col-3"><label>seller_rating</label><input name="car0_seller_rating"
+                                placeholder="0-5" /></div>
+                        <div class="col-3"><label>price_drop</label><input name="car0_price_drop"
+                                placeholder="vd: 500" /></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <template>
+                <div class="card car-card" data-prefix="car" data-index="__INDEX__" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe</b>
+                        <button class="btn danger btn-remove-car" type="button">Xoá</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-3"><label>price*</label><input name="car__INDEX___price"
+                                placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>mileage*</label><input name="car__INDEX___mileage"
+                                placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>year*</label><input name="car__INDEX___year" placeholder="vd: 2019" />
+                        </div>
+                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
+                                name="car__INDEX___accidents_or_damage" placeholder="0 hoặc 1" /></div>
+                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car__INDEX___one_owner"
+                                placeholder="0 hoặc 1" /></div>
+                        <div class="col-3"><label>mpg</label><input name="car__INDEX___mpg"
+                                placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>driver_rating</label><input name="car__INDEX___driver_rating"
+                                placeholder="0-5" /></div>
+                        <div class="col-3"><label>seller_rating</label><input name="car__INDEX___seller_rating"
+                                placeholder="0-5" /></div>
+                        <div class="col-3"><label>price_drop</label><input name="car__INDEX___price_drop"
+                                placeholder="vd: 500" /></div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <h3>3) So sánh với xe trong kho (tuỳ chọn)</h3>
+        <div class="grid">
+            <div class="col-6">
+                <label style="display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" name="compare_stock" value="1" {% if compare_stock %}checked{% endif %} />
+                    So sánh với xe trong kho (cars.csv)
+                </label>
+                <div class="hint">Nếu bật, hệ thống sẽ chấm điểm toàn bộ kho để lấy Top N và ước lượng vị trí xe của bạn
+                    trong kho. Có thể mất thời gian nếu dataset lớn.</div>
+            </div>
+            <div class="col-3">
+                <label>Top N</label>
+                <input type="number" min="1" max="50" name="top_n" value="{{ top_n or 10 }}" />
+            </div>
+        </div>
+
+        <button class="btn" type="submit">Đánh giá xe</button>
+    </form>
+</div>
+
+{% if results %}
+<div class="card">
+    <h3>Kết quả đánh giá</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>AHP</th>
+                <th>Rủi ro tai nạn (ML)</th>
+                <th>Bảo dưỡng (ML)</th>
+                <th>Kết luận</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in results %}
+            <tr>
+                <td>{{ r.idx }}</td>
+                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
+                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
+                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td>
+                    {% if r.badge == 'green' %}
+                    <span class="badge green">Đáng mua</span>
+                    {% elif r.badge == 'yellow' %}
+                    <span class="badge yellow">Cân nhắc</span>
+                    {% else %}
+                    <span class="badge red">Không nên mua</span>
+                    {% endif %}
+                    <div class="small">{{ r.message }}</div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if compare_stock and stock_info and stock_info.percents %}
+    <div style="margin-top:10px;" class="small">
+        <b>So với xe trong kho:</b>
+        {% for p in stock_info.percents %}
+        <div>Xe #{{ loop.index }}: AHP tham chiếu = {{ '%.3f'|format(p.ahp_ref) }} • cao hơn khoảng {{
+            '%.1f'|format(p.percentile) }}% xe trong kho.</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if compare_stock and stock_results %}
+<div class="card">
+    <h3>Gợi ý xe trong kho (Top {{ stock_results|length }})</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Xe</th>
+                <th>Năm</th>
+                <th>Giá</th>
+                <th>Mileage</th>
+                <th>AHP</th>
+                <th>Rủi ro tai nạn (ML)</th>
+                <th>Bảo dưỡng (ML)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in stock_results %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ r.title }}</td>
+                <td>{{ r.year }}</td>
+                <td>{{ r.price }}</td>
+                <td>{{ r.mileage }}</td>
+                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
+                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
+                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td>
+                    <form method="post" action="{{ url_for('save_my_cars') }}">
+                        <input type="hidden" name="source" value="stock" />
+                        <input type="hidden" name="return_to" value="{{ url_for('evaluate') }}" />
+                        <textarea name="car_json" style="display:none">{{ r|tojson }}</textarea>
+                        <button class="btn secondary" type="submit">Lưu</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}

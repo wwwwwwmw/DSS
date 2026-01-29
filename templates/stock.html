@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>So sánh xe trong kho (Dataset)</h2>
+    <div class="small">Chọn trọng số 1–9 cho tiêu chí, nhập số lượng Top cần xuất, hệ thống sẽ chấm điểm AHP cho toàn bộ
+        xe trong `cars.csv` và lọc ra các xe phù hợp nhất.</div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('stock') }}">
+        <h3>1) Trọng số (1-9)</h3>
+        <div class="grid">
+            {% for c in criteria %}
+            <div class="col-3">
+                <label>{{ c.label }}</label>
+                <input type="number" min="1" max="9" name="w_{{ c.key }}" value="{{ c.default }}" required />
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3>2) Số lượng Top</h3>
+        <div class="grid">
+            <div class="col-3">
+                <label>Top N</label>
+                <input type="number" min="1" max="50" name="top_n" value="{{ top_n or 10 }}" required />
+                <div class="hint">Khuyến nghị 5–20. Tối đa 50.</div>
+            </div>
+        </div>
+
+        <button class="btn" type="submit">Tìm xe phù hợp</button>
+    </form>
+</div>
+
+{% if results %}
+<div class="card">
+    <h3>Kết quả Top {{ results|length }}</h3>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Xe</th>
+                <th>Năm</th>
+                <th>Giá</th>
+                <th>Mileage</th>
+                <th>AHP score</th>
+                <th>Rủi ro tai nạn (ML)</th>
+                <th>Bảo dưỡng (ML)</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in results %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ r.title }}</td>
+                <td>{{ r.year }}</td>
+                <td>{{ r.price }}</td>
+                <td>{{ r.mileage }}</td>
+                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
+                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
+                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td>
+                    {% if current_user.is_authenticated %}
+                    <form method="post" action="{{ url_for('save_my_cars') }}">
+                        <input type="hidden" name="source" value="stock" />
+                        <input type="hidden" name="return_to" value="{{ url_for('stock') }}" />
+                        <input type="hidden" name="title" value="{{ r.title or ('Xe kho #' ~ loop.index) }}" />
+                        <textarea name="car_json" style="display:none">{{ r|tojson }}</textarea>
+                        <button class="btn secondary" type="submit">Lưu</button>
+                    </form>
+                    {% else %}
+                    <a class="btn secondary" href="{{ url_for('login') }}">Đăng nhập</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -30,6 +30,18 @@ class RecommendationHistory(Base):
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class SavedCar(Base):
+    __tablename__ = "saved_cars"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")  # manual | stock
+    car_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class CriteriaConfig(Base):
     __tablename__ = "criteria_config"
 

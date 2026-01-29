@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Chi tiết xe đã lưu</h2>
+    <div class="small">
+        <div><b>Thời gian:</b> {{ item.created_at }}</div>
+        <div><b>Nguồn:</b> {{ item.source }}</div>
+        <div><b>Tiêu đề:</b> {{ item.title }}</div>
+    </div>
+
+    <div class="actions" style="margin-top:10px;">
+        <a class="btn secondary" href="{{ url_for('my_cars') }}">Quay lại</a>
+        <a class="btn secondary" href="{{ url_for('my_car_edit', item_id=item.id) }}">Sửa</a>
+        <form method="post" action="{{ url_for('delete_my_car', item_id=item.id) }}" style="display:inline">
+            <button class="btn danger" type="submit">Xóa</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Thuộc tính</h3>
+    {% if car and car is mapping %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Thuộc tính</th>
+                <th>Giá trị</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for k, v in car.items() %}
+            <tr>
+                <td>{{ k }}</td>
+                <td>{{ v }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="small">Không có dữ liệu xe.</div>
+    {% endif %}
+
+    <details style="margin-top:10px;">
+        <summary class="small">Xem JSON</summary>
+        <pre style="white-space:pre-wrap">{{ car|tojson(indent=2) }}</pre>
+    </details>
+</div>
+{% endblock %}

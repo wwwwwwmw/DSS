@@ -15,10 +15,15 @@
             <div class="brand">DSS • Hệ thống hỗ trợ mua ô tô</div>
             <div class="nav">
                 <a href="{{ url_for('home') }}">Tư vấn</a>
-                <a href="{{ url_for('compare') }}">So sánh</a>
                 {% if current_user.is_authenticated %}
+                <a href="{{ url_for('evaluate') }}">Đánh giá 1 xe</a>
+                {% endif %}
+                <a href="{{ url_for('compare') }}">So sánh</a>
+                <a href="{{ url_for('stock') }}">Xe trong kho</a>
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('my_cars') }}">Xe của tôi</a>
                 <a href="{{ url_for('history') }}">Lịch sử</a>
-                {% if current_user.role == 'admin' %}
+                {% if current_user.role is defined and current_user.role == 'admin' %}
                 <a href="{{ url_for('admin') }}">Admin</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}">Đăng xuất</a>
