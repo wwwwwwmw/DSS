@@ -33,24 +33,51 @@
                         <button class="btn danger btn-remove-car" type="button">Xóa</button>
                     </div>
                     <div class="grid">
-                        <div class="col-4"><label>Price *</label><input name="car{{i}}_price" type="number" step="1"
-                                placeholder="15000" /></div>
-                        <div class="col-4"><label>Mileage *</label><input name="car{{i}}_mileage" type="number" step="1"
+                        <div class="col-4"><label>Giá bán ($) *</label><input name="car{{i}}_price" type="number"
+                                step="1" placeholder="15000" /></div>
+                        <div class="col-4"><label>Số dặm *</label><input name="car{{i}}_mileage" type="number" step="1"
                                 placeholder="60000" /></div>
-                        <div class="col-4"><label>Year *</label><input name="car{{i}}_year" type="number" step="1"
-                                placeholder="2018" /></div>
-                        <div class="col-4"><label>Accidents/Damage (0/1) *</label><input
-                                name="car{{i}}_accidents_or_damage" type="number" min="0" max="1" step="1"
-                                placeholder="0" /></div>
-                        <div class="col-4"><label>One owner (0/1) *</label><input name="car{{i}}_one_owner"
-                                type="number" min="0" max="1" step="1" placeholder="1" /></div>
-                        <div class="col-4"><label>MPG</label><input name="car{{i}}_mpg" type="text"
+                        <div class="col-4"><label>Năm sản xuất *</label><input name="car{{i}}_year" type="number"
+                                step="1" placeholder="2018" /></div>
+                        <div class="col-4"><label>Tai nạn/Hỏng hóc *</label>
+                            <select name="car{{i}}_accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Không</option>
+                                <option value="1">1 - Có</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>Một chủ duy nhất *</label>
+                            <select name="car{{i}}_one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Nhiều chủ</option>
+                                <option value="1" selected>1 - Một chủ</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>MPG (Tiêu thụ NL)</label><input name="car{{i}}_mpg" type="text"
                                 placeholder="30 hoặc 39-38" /></div>
-                        <div class="col-4"><label>Driver rating (0-5)</label><input name="car{{i}}_driver_rating"
-                                type="number" step="0.1" placeholder="4.5" /></div>
-                        <div class="col-4"><label>Seller rating (0-5)</label><input name="car{{i}}_seller_rating"
-                                type="number" step="0.1" placeholder="4.7" /></div>
-                        <div class="col-4"><label>Price drop</label><input name="car{{i}}_price_drop" type="number"
+                        <div class="col-4"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car{{i}}_driver_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car{{i}}_seller_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop" type="number"
                                 step="1" placeholder="500" /></div>
                     </div>
                     <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
@@ -65,25 +92,52 @@
                         <button class="btn danger btn-remove-car" type="button">Xóa</button>
                     </div>
                     <div class="grid">
-                        <div class="col-4"><label>Price *</label><input name="car__INDEX___price" type="number" step="1"
-                                placeholder="15000" /></div>
-                        <div class="col-4"><label>Mileage *</label><input name="car__INDEX___mileage" type="number"
+                        <div class="col-4"><label>Giá bán ($) *</label><input name="car__INDEX___price" type="number"
+                                step="1" placeholder="15000" /></div>
+                        <div class="col-4"><label>Số dặm *</label><input name="car__INDEX___mileage" type="number"
                                 step="1" placeholder="60000" /></div>
-                        <div class="col-4"><label>Year *</label><input name="car__INDEX___year" type="number" step="1"
-                                placeholder="2018" /></div>
-                        <div class="col-4"><label>Accidents/Damage (0/1) *</label><input
-                                name="car__INDEX___accidents_or_damage" type="number" min="0" max="1" step="1"
-                                placeholder="0" /></div>
-                        <div class="col-4"><label>One owner (0/1) *</label><input name="car__INDEX___one_owner"
-                                type="number" min="0" max="1" step="1" placeholder="1" /></div>
-                        <div class="col-4"><label>MPG</label><input name="car__INDEX___mpg" type="text"
+                        <div class="col-4"><label>Năm sản xuất *</label><input name="car__INDEX___year" type="number"
+                                step="1" placeholder="2018" /></div>
+                        <div class="col-4"><label>Tai nạn/Hỏng hóc *</label>
+                            <select name="car__INDEX___accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Không</option>
+                                <option value="1">1 - Có</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>Một chủ duy nhất *</label>
+                            <select name="car__INDEX___one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Nhiều chủ</option>
+                                <option value="1" selected>1 - Một chủ</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>MPG (Tiêu thụ NL)</label><input name="car__INDEX___mpg" type="text"
                                 placeholder="30 hoặc 39-38" /></div>
-                        <div class="col-4"><label>Driver rating (0-5)</label><input name="car__INDEX___driver_rating"
-                                type="number" step="0.1" placeholder="4.5" /></div>
-                        <div class="col-4"><label>Seller rating (0-5)</label><input name="car__INDEX___seller_rating"
-                                type="number" step="0.1" placeholder="4.7" /></div>
-                        <div class="col-4"><label>Price drop</label><input name="car__INDEX___price_drop" type="number"
-                                step="1" placeholder="500" /></div>
+                        <div class="col-4"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car__INDEX___driver_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car__INDEX___seller_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-4"><label>Giảm giá ($)</label><input name="car__INDEX___price_drop"
+                                type="number" step="1" placeholder="500" /></div>
                     </div>
                     <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
                 </div>

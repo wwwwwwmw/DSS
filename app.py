@@ -102,6 +102,50 @@ def create_app() -> Flask:
                 for it in items
             ]
 
+    def get_risk_level(risk_pct: float) -> Dict[str, str]:
+        """Chuyển đổi tỷ lệ rủi ro (%) thành nhãn cấp độ.
+        
+        Returns dict với 'label' và 'badge_class'.
+        Cấp độ:
+        - Rất thấp: 0-20%
+        - Thấp: 20-40%
+        - Trung bình: 40-60%
+        - Cao: 60-80%
+        - Rất cao: 80-100%
+        """
+        if risk_pct < 20:
+            return {"label": "Rất thấp", "badge_class": "success"}
+        elif risk_pct < 40:
+            return {"label": "Thấp", "badge_class": "info"}
+        elif risk_pct < 60:
+            return {"label": "Trung bình", "badge_class": "warning"}
+        elif risk_pct < 80:
+            return {"label": "Cao", "badge_class": "danger"}
+        else:
+            return {"label": "Rất cao", "badge_class": "danger-dark"}
+
+    def get_maintenance_level(annual_cost: float) -> Dict[str, str]:
+        """Chuyển đổi chi phí bảo dưỡng hàng năm thành nhãn cấp độ.
+        
+        Returns dict với 'label' và 'badge_class'.
+        Cấp độ (dựa trên chi phí hàng năm):
+        - Rất thấp: < 3 triệu/năm
+        - Thấp: 3-6 triệu/năm
+        - Trung bình: 6-9 triệu/năm
+        - Cao: 9-12 triệu/năm
+        - Rất cao: >= 12 triệu/năm
+        """
+        if annual_cost < 3000:
+            return {"label": "Rất thấp", "badge_class": "success"}
+        elif annual_cost < 6000:
+            return {"label": "Thấp", "badge_class": "info"}
+        elif annual_cost < 9000:
+            return {"label": "Trung bình", "badge_class": "warning"}
+        elif annual_cost < 12000:
+            return {"label": "Cao", "badge_class": "danger"}
+        else:
+            return {"label": "Rất cao", "badge_class": "danger-dark"}
+
     def get_models():
         return load_models(settings.model_path)
 
@@ -375,9 +419,8 @@ def create_app() -> Flask:
         return render_template("index.html", criteria=criteria, results=None, top_recommendations=None)
 
     @app.route("/evaluate", methods=["GET", "POST"])
-    @login_required
     def evaluate():
-        """Đánh giá xe ngoài (tối thiểu 1 xe) và có thể so sánh với xe trong kho."""
+        """Đánh giá xe ngoài (tối thiểu 1 xe) và có thể so sánh với xe trong kho. Khách vãng lai có thể truy cập."""
 
         criteria = load_criteria()
         if request.method == "GET":
@@ -414,13 +457,21 @@ def create_app() -> Flask:
         results: List[Dict[str, Any]] = []
         for idx, (s, ap, mm) in enumerate(zip(scores, accident_probs, maint_monthly), start=1):
             option, badge, message = choose_option(s, ap, mm)
+            risk_pct = float(ap) * 100.0
+            annual_cost = int(round(mm * 12))
+            risk_level = get_risk_level(risk_pct)
+            maint_level = get_maintenance_level(annual_cost)
             results.append(
                 {
                     "idx": idx,
                     "ahp_score": float(s),
-                    "accident_risk_pct": float(ap) * 100.0,
+                    "accident_risk_pct": risk_pct,
+                    "risk_level_label": risk_level["label"],
+                    "risk_level_badge": risk_level["badge_class"],
                     "maintenance_monthly": int(round(mm)),
-                    "maintenance_annual": int(round(mm * 12)),
+                    "maintenance_annual": annual_cost,
+                    "maintenance_level_label": maint_level["label"],
+                    "maintenance_level_badge": maint_level["badge_class"],
                     "option": option,
                     "badge": badge,
                     "message": message,
@@ -505,12 +556,20 @@ def create_app() -> Flask:
 
                 stock_results = []
                 for car, ap, mm in zip(top_cars, ap2, mm2):
+                    risk_pct = float(ap) * 100.0
+                    annual_cost = int(round(mm * 12))
+                    risk_level = get_risk_level(risk_pct)
+                    maint_level = get_maintenance_level(annual_cost)
                     stock_results.append(
                         {
                             **car,
-                            "accident_risk_pct": float(ap) * 100.0,
+                            "accident_risk_pct": risk_pct,
+                            "risk_level_label": risk_level["label"],
+                            "risk_level_badge": risk_level["badge_class"],
                             "maintenance_monthly": int(round(mm)),
-                            "maintenance_annual": int(round(mm * 12)),
+                            "maintenance_annual": annual_cost,
+                            "maintenance_level_label": maint_level["label"],
+                            "maintenance_level_badge": maint_level["badge_class"],
                         }
                     )
 
@@ -568,13 +627,21 @@ def create_app() -> Flask:
         results: List[Dict[str, Any]] = []
         for idx, (s, ap, mm) in enumerate(zip(scores, accident_probs, maint_monthly), start=1):
             option, badge, message = choose_option(s, ap, mm)
+            risk_pct = float(ap) * 100.0
+            annual_cost = int(round(mm * 12))
+            risk_level = get_risk_level(risk_pct)
+            maint_level = get_maintenance_level(annual_cost)
             results.append(
                 {
                     "idx": idx,
                     "ahp_score": float(s),
-                    "accident_risk_pct": float(ap) * 100.0,
+                    "accident_risk_pct": risk_pct,
+                    "risk_level_label": risk_level["label"],
+                    "risk_level_badge": risk_level["badge_class"],
                     "maintenance_monthly": int(round(mm)),
-                    "maintenance_annual": int(round(mm * 12)),
+                    "maintenance_annual": annual_cost,
+                    "maintenance_level_label": maint_level["label"],
+                    "maintenance_level_badge": maint_level["badge_class"],
                     "option": option,
                     "badge": badge,
                     "message": message,
@@ -727,12 +794,20 @@ def create_app() -> Flask:
 
         results = []
         for car, ap, mm in zip(cars, accident_probs, maint_monthly):
+            risk_pct = float(ap) * 100.0
+            annual_cost = int(round(mm * 12))
+            risk_level = get_risk_level(risk_pct)
+            maint_level = get_maintenance_level(annual_cost)
             results.append(
                 {
                     **car,
-                    "accident_risk_pct": float(ap) * 100.0,
+                    "accident_risk_pct": risk_pct,
+                    "risk_level_label": risk_level["label"],
+                    "risk_level_badge": risk_level["badge_class"],
                     "maintenance_monthly": int(round(mm)),
-                    "maintenance_annual": int(round(mm * 12)),
+                    "maintenance_annual": annual_cost,
+                    "maintenance_level_label": maint_level["label"],
+                    "maintenance_level_badge": maint_level["badge_class"],
                 }
             )
 

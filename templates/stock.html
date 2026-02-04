@@ -58,8 +58,8 @@
                 <td>{{ r.price }}</td>
                 <td>{{ r.mileage }}</td>
                 <td>{{ '%.3f'|format(r.ahp_score) }}</td>
-                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
-                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
+                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
                 <td>
                     {% if current_user.is_authenticated %}
                     <form method="post" action="{{ url_for('save_my_cars') }}">

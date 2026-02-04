@@ -156,6 +156,36 @@ select {
     color: #ffd0d0
 }
 
+.badge.danger-dark {
+    background: rgba(153, 27, 27, .25);
+    border-color: rgba(239, 68, 68, .6);
+    color: #ffb0b0
+}
+
+.badge.success {
+    background: rgba(22, 163, 74, .15);
+    border-color: rgba(22, 163, 74, .4);
+    color: #c7f9d4
+}
+
+.badge.info {
+    background: rgba(59, 130, 246, .15);
+    border-color: rgba(59, 130, 246, .4);
+    color: #cfe4ff
+}
+
+.badge.warning {
+    background: rgba(234, 179, 8, .15);
+    border-color: rgba(234, 179, 8, .4);
+    color: #fff1b3
+}
+
+.badge.danger {
+    background: rgba(239, 68, 68, .15);
+    border-color: rgba(239, 68, 68, .4);
+    color: #ffd0d0
+}
+
 .table {
     width: 100%;
     border-collapse: collapse

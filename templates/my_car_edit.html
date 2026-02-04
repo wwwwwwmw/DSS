@@ -33,21 +33,50 @@
                         <span class="small">(chỉ sửa 1 xe)</span>
                     </div>
                     <div class="grid">
-                        <div class="col-3"><label>price*</label><input name="car0_price" value="{{ car.price }}" />
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car0_price"
+                                value="{{ car.price }}" />
                         </div>
-                        <div class="col-3"><label>mileage*</label><input name="car0_mileage"
-                                value="{{ car.mileage }}" /></div>
-                        <div class="col-3"><label>year*</label><input name="car0_year" value="{{ car.year }}" /></div>
-                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
-                                name="car0_accidents_or_damage" value="{{ car.accidents_or_damage }}" /></div>
-                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car0_one_owner"
-                                value="{{ car.one_owner }}" /></div>
-                        <div class="col-3"><label>mpg</label><input name="car0_mpg" value="{{ car.mpg }}" /></div>
-                        <div class="col-3"><label>driver_rating</label><input name="car0_driver_rating"
-                                value="{{ car.driver_rating }}" /></div>
-                        <div class="col-3"><label>seller_rating</label><input name="car0_seller_rating"
-                                value="{{ car.seller_rating }}" /></div>
-                        <div class="col-3"><label>price_drop</label><input name="car0_price_drop"
+                        <div class="col-3"><label>Số dặm*</label><input name="car0_mileage" value="{{ car.mileage }}" />
+                        </div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car0_year" value="{{ car.year }}" />
+                        </div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
+                            <select name="car0_accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0" {% if car.accidents_or_damage=='0' %}selected{% endif %}>0 - Không
+                                </option>
+                                <option value="1" {% if car.accidents_or_damage=='1' %}selected{% endif %}>1 - Có
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
+                            <select name="car0_one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0" {% if car.one_owner=='0' %}selected{% endif %}>0 - Nhiều chủ</option>
+                                <option value="1" {% if car.one_owner=='1' %}selected{% endif %}>1 - Một chủ</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car0_mpg"
+                                value="{{ car.mpg }}" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car0_driver_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{r}}" {% if car.driver_rating==r|string %}selected{% endif %}>{{r}}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car0_seller_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{r}}" {% if car.seller_rating==r|string %}selected{% endif %}>{{r}}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car0_price_drop"
                                 value="{{ car.price_drop }}" /></div>
                     </div>
                 </div>

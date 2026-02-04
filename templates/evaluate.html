@@ -25,8 +25,9 @@
         <div class="flash danger client-errors" style="display:none"></div>
 
         <div data-car-form="1" data-min="1">
+            {% if current_user.is_authenticated %}
             <div class="card saved-import" style="margin:10px 0;">
-                <div class="small"><b>Chọn từ “Xe của tôi”</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
+                <div class="small"><b>Chọn từ "Xe của tôi"</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
                     ảnh
                     hưởng dữ liệu đã lưu).</div>
                 <div class="actions" style="margin-top:8px;">
@@ -34,6 +35,7 @@
                     <button class="btn secondary btn-import-saved" type="button">Đổ vào form</button>
                 </div>
             </div>
+            {% endif %}
 
             <div class="actions" style="margin:10px 0;">
                 <div class="small">Bạn có thể thêm nhiều xe, nhưng tối thiểu 1 xe là đủ.</div>
@@ -50,24 +52,51 @@
                     </div>
 
                     <div class="grid">
-                        <div class="col-3"><label>price*</label><input name="car{{ i }}_price"
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car{{ i }}_price"
                                 value="{{ cars[i].price }}" placeholder="vd: 24000" /></div>
-                        <div class="col-3"><label>mileage*</label><input name="car{{ i }}_mileage"
+                        <div class="col-3"><label>Số dặm*</label><input name="car{{ i }}_mileage"
                                 value="{{ cars[i].mileage }}" placeholder="vd: 52000" /></div>
-                        <div class="col-3"><label>year*</label><input name="car{{ i }}_year" value="{{ cars[i].year }}"
-                                placeholder="vd: 2019" /></div>
-                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
-                                name="car{{ i }}_accidents_or_damage" value="{{ cars[i].accidents_or_damage }}"
-                                placeholder="0 hoặc 1" /></div>
-                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car{{ i }}_one_owner"
-                                value="{{ cars[i].one_owner }}" placeholder="0 hoặc 1" /></div>
-                        <div class="col-3"><label>mpg</label><input name="car{{ i }}_mpg" value="{{ cars[i].mpg }}"
-                                placeholder="vd: 30 hoặc 39-38" /></div>
-                        <div class="col-3"><label>driver_rating</label><input name="car{{ i }}_driver_rating"
-                                value="{{ cars[i].driver_rating }}" placeholder="0-5" /></div>
-                        <div class="col-3"><label>seller_rating</label><input name="car{{ i }}_seller_rating"
-                                value="{{ cars[i].seller_rating }}" placeholder="0-5" /></div>
-                        <div class="col-3"><label>price_drop</label><input name="car{{ i }}_price_drop"
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car{{ i }}_year"
+                                value="{{ cars[i].year }}" placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
+                            <select name="car{{ i }}_accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0" {% if cars[i].accidents_or_damage=='0' %}selected{% endif %}>0 - Không
+                                </option>
+                                <option value="1" {% if cars[i].accidents_or_damage=='1' %}selected{% endif %}>1 - Có
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
+                            <select name="car{{ i }}_one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0" {% if cars[i].one_owner=='0' %}selected{% endif %}>0 - Nhiều chủ
+                                </option>
+                                <option value="1" {% if cars[i].one_owner=='1' %}selected{% endif %}>1 - Một chủ
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car{{ i }}_mpg"
+                                value="{{ cars[i].mpg }}" placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car{{ i }}_driver_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{r}}" {% if cars[i].driver_rating==r|string %}selected{% endif %}>{{r}}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car{{ i }}_seller_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{r}}" {% if cars[i].seller_rating==r|string %}selected{% endif %}>{{r}}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car{{ i }}_price_drop"
                                 value="{{ cars[i].price_drop }}" placeholder="vd: 500" /></div>
                     </div>
                 </div>
@@ -79,22 +108,53 @@
                         <button class="btn danger btn-remove-car" type="button">Xoá</button>
                     </div>
                     <div class="grid">
-                        <div class="col-3"><label>price*</label><input name="car0_price" placeholder="vd: 24000" />
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car0_price"
+                                placeholder="vd: 24000" />
                         </div>
-                        <div class="col-3"><label>mileage*</label><input name="car0_mileage" placeholder="vd: 52000" />
+                        <div class="col-3"><label>Số dặm*</label><input name="car0_mileage" placeholder="vd: 52000" />
                         </div>
-                        <div class="col-3"><label>year*</label><input name="car0_year" placeholder="vd: 2019" /></div>
-                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
-                                name="car0_accidents_or_damage" placeholder="0 hoặc 1" /></div>
-                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car0_one_owner"
-                                placeholder="0 hoặc 1" /></div>
-                        <div class="col-3"><label>mpg</label><input name="car0_mpg" placeholder="vd: 30 hoặc 39-38" />
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car0_year" placeholder="vd: 2019" />
                         </div>
-                        <div class="col-3"><label>driver_rating</label><input name="car0_driver_rating"
-                                placeholder="0-5" /></div>
-                        <div class="col-3"><label>seller_rating</label><input name="car0_seller_rating"
-                                placeholder="0-5" /></div>
-                        <div class="col-3"><label>price_drop</label><input name="car0_price_drop"
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
+                            <select name="car0_accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Không</option>
+                                <option value="1">1 - Có</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
+                            <select name="car0_one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Nhiều chủ</option>
+                                <option value="1" selected>1 - Một chủ</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car0_mpg"
+                                placeholder="vd: 30 hoặc 39-38" />
+                        </div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car0_driver_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car0_seller_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car0_price_drop"
                                 placeholder="vd: 500" /></div>
                     </div>
                 </div>
@@ -108,23 +168,52 @@
                         <button class="btn danger btn-remove-car" type="button">Xoá</button>
                     </div>
                     <div class="grid">
-                        <div class="col-3"><label>price*</label><input name="car__INDEX___price"
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car__INDEX___price"
                                 placeholder="vd: 24000" /></div>
-                        <div class="col-3"><label>mileage*</label><input name="car__INDEX___mileage"
+                        <div class="col-3"><label>Số dặm*</label><input name="car__INDEX___mileage"
                                 placeholder="vd: 52000" /></div>
-                        <div class="col-3"><label>year*</label><input name="car__INDEX___year" placeholder="vd: 2019" />
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car__INDEX___year"
+                                placeholder="vd: 2019" />
                         </div>
-                        <div class="col-3"><label>accidents_or_damage* (0/1)</label><input
-                                name="car__INDEX___accidents_or_damage" placeholder="0 hoặc 1" /></div>
-                        <div class="col-3"><label>one_owner* (0/1)</label><input name="car__INDEX___one_owner"
-                                placeholder="0 hoặc 1" /></div>
-                        <div class="col-3"><label>mpg</label><input name="car__INDEX___mpg"
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
+                            <select name="car__INDEX___accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Không</option>
+                                <option value="1">1 - Có</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
+                            <select name="car__INDEX___one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Nhiều chủ</option>
+                                <option value="1" selected>1 - Một chủ</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car__INDEX___mpg"
                                 placeholder="vd: 30 hoặc 39-38" /></div>
-                        <div class="col-3"><label>driver_rating</label><input name="car__INDEX___driver_rating"
-                                placeholder="0-5" /></div>
-                        <div class="col-3"><label>seller_rating</label><input name="car__INDEX___seller_rating"
-                                placeholder="0-5" /></div>
-                        <div class="col-3"><label>price_drop</label><input name="car__INDEX___price_drop"
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car__INDEX___driver_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car__INDEX___seller_rating">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car__INDEX___price_drop"
                                 placeholder="vd: 500" /></div>
                     </div>
                 </div>
@@ -169,8 +258,8 @@
             <tr>
                 <td>{{ r.idx }}</td>
                 <td>{{ '%.3f'|format(r.ahp_score) }}</td>
-                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
-                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
+                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
                 <td>
                     {% if r.badge == 'green' %}
                     <span class="badge green">Đáng mua</span>
@@ -224,15 +313,19 @@
                 <td>{{ r.price }}</td>
                 <td>{{ r.mileage }}</td>
                 <td>{{ '%.3f'|format(r.ahp_score) }}</td>
-                <td>{{ '%.1f'|format(r.accident_risk_pct) }}%</td>
-                <td>{{ r.maintenance_monthly }} /tháng • {{ r.maintenance_annual }} /năm</td>
+                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
+                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
                 <td>
+                    {% if current_user.is_authenticated %}
                     <form method="post" action="{{ url_for('save_my_cars') }}">
                         <input type="hidden" name="source" value="stock" />
                         <input type="hidden" name="return_to" value="{{ url_for('evaluate') }}" />
                         <textarea name="car_json" style="display:none">{{ r|tojson }}</textarea>
                         <button class="btn secondary" type="submit">Lưu</button>
                     </form>
+                    {% else %}
+                    <a class="btn secondary" href="{{ url_for('login') }}">Đăng nhập</a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
