@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
+from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import get_settings
@@ -21,10 +23,12 @@ from ml import (
     ahp_score,
     ahp_score_dataframe,
     choose_option,
+    compute_ahp_weights,
     load_models,
     normalize_weights,
     parse_mpg,
     parse_mpg_series,
+    parse_pairwise_matrix_text,
     predict,
     serialize_payload,
 )
@@ -36,6 +40,15 @@ def create_app() -> Flask:
 
     app = Flask(__name__)
     app.secret_key = settings.secret_key
+
+    # Upload limit (admin retrain CSV)
+    max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(5 * 1024 * 1024)))  # default 5MB
+    app.config["MAX_CONTENT_LENGTH"] = max_upload_bytes
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def _handle_413(_e):
+        flash(f"File upload quá lớn. Giới hạn {max_upload_bytes // (1024 * 1024)}MB.", "danger")
+        return redirect(request.referrer or url_for("admin"))
 
     engine, SessionLocal = create_session_factory(settings.database_url)
     Base.metadata.create_all(bind=engine)
@@ -50,6 +63,12 @@ def create_app() -> Flask:
             user = s.get(User, int(user_id))
             if user is None:
                 return None
+            # Refresh before expunge to avoid DetachedInstanceError surprises
+            # (e.g., if any lazy-loaded attrs/relationships are accessed later).
+            try:
+                s.refresh(user)
+            except Exception:
+                pass
             # Detach instance so template access won't require an active session.
             s.expunge(user)
             return user
@@ -77,13 +96,16 @@ def create_app() -> Flask:
             exists = s.query(CriteriaConfig).first()
             if exists:
                 return
+            # Seed defaults as a normalized float weight vector.
+            seed_raw = {c["key"]: float(c.get("default", 5)) for c in CRITERIA}
+            seed = normalize_weights(seed_raw)
             for c in CRITERIA:
                 s.add(
                     CriteriaConfig(
                         key=c["key"],
                         label=c["label"],
                         direction=c["direction"],
-                        default_weight=int(c.get("default", 5)),
+                        default_weight=float(seed.get(c["key"], 0.0)),
                     )
                 )
 
@@ -97,7 +119,7 @@ def create_app() -> Flask:
                     "key": it.key,
                     "label": it.label,
                     "direction": it.direction,
-                    "default": int(it.default_weight),
+                    "default": float(it.default_weight),
                 }
                 for it in items
             ]
@@ -124,27 +146,30 @@ def create_app() -> Flask:
         else:
             return {"label": "Rất cao", "badge_class": "danger-dark"}
 
-    def get_maintenance_level(annual_cost: float) -> Dict[str, str]:
-        """Chuyển đổi chi phí bảo dưỡng hàng năm thành nhãn cấp độ.
-        
-        Returns dict với 'label' và 'badge_class'.
-        Cấp độ (dựa trên chi phí hàng năm):
-        - Rất thấp: < 3 triệu/năm
-        - Thấp: 3-6 triệu/năm
-        - Trung bình: 6-9 triệu/năm
-        - Cao: 9-12 triệu/năm
-        - Rất cao: >= 12 triệu/năm
+    def get_maintenance_level(monthly_usd: float) -> Dict[str, str]:
+        """Label maintenance cost levels (USD/month).
+
+        Thresholds are tuned for USD/month to match model output.
+        - Rất thấp: < $100/mo
+        - Thấp: $100-$200/mo
+        - Trung bình: $200-$300/mo
+        - Cao: $300-$450/mo
+        - Rất cao: >= $450/mo
         """
-        if annual_cost < 3000:
+        try:
+            x = float(monthly_usd)
+        except Exception:
+            x = 1e9
+
+        if x < 100:
             return {"label": "Rất thấp", "badge_class": "success"}
-        elif annual_cost < 6000:
+        if x < 200:
             return {"label": "Thấp", "badge_class": "info"}
-        elif annual_cost < 9000:
+        if x < 300:
             return {"label": "Trung bình", "badge_class": "warning"}
-        elif annual_cost < 12000:
+        if x < 450:
             return {"label": "Cao", "badge_class": "danger"}
-        else:
-            return {"label": "Rất cao", "badge_class": "danger-dark"}
+        return {"label": "Rất cao", "badge_class": "danger-dark"}
 
     def get_models():
         return load_models(settings.model_path)
@@ -185,7 +210,7 @@ def create_app() -> Flask:
             s.add(
                 RecommendationHistory(
                     user_id=int(current_user.get_id()),
-                    created_at=dt.datetime.utcnow(),
+                    created_at=dt.datetime.now(dt.timezone.utc),
                     car_count=len(cars),
                     summary=summary,
                     payload_json=payload_json,
@@ -345,9 +370,9 @@ def create_app() -> Flask:
                 if n is None or n < 0 or n > 5:
                     errors.append(f"Xe #{idx}: seller_rating phải trong khoảng 0-5")
 
-            pd = sstrip(car.get("price_drop", ""))
-            if pd:
-                n = f(pd)
+            price_drop_val = sstrip(car.get("price_drop", ""))
+            if price_drop_val:
+                n = f(price_drop_val)
                 if n is None or n < 0:
                     errors.append(f"Xe #{idx}: price_drop phải là số >= 0")
 
@@ -362,7 +387,10 @@ def create_app() -> Flask:
                 v = float(raw)
             except Exception:
                 v = float(c.get("default", 5))
-            out[key] = max(1.0, min(9.0, v))
+            # Accept any non-negative weights; scoring will normalize.
+            if not math.isfinite(v):
+                v = float(c.get("default", 0.0))
+            out[key] = max(0.0, min(1e6, float(v)))
         return out
 
     def ahp_score_single_against_df(car: Dict[str, Any], weights: Dict[str, float], df) -> float:
@@ -460,7 +488,7 @@ def create_app() -> Flask:
             risk_pct = float(ap) * 100.0
             annual_cost = int(round(mm * 12))
             risk_level = get_risk_level(risk_pct)
-            maint_level = get_maintenance_level(annual_cost)
+            maint_level = get_maintenance_level(float(mm))
             results.append(
                 {
                     "idx": idx,
@@ -501,10 +529,8 @@ def create_app() -> Flask:
                 "mpg",
                 "accidents_or_damage",
                 "one_owner",
-                "personal_use_only",
                 "seller_rating",
                 "driver_rating",
-                "driver_reviews_num",
                 "price_drop",
                 "price",
             ]
@@ -540,10 +566,8 @@ def create_app() -> Flask:
                             "mpg": row.get("mpg", ""),
                             "accidents_or_damage": row.get("accidents_or_damage", ""),
                             "one_owner": row.get("one_owner", ""),
-                            "personal_use_only": row.get("personal_use_only", ""),
                             "seller_rating": row.get("seller_rating", ""),
                             "driver_rating": row.get("driver_rating", ""),
-                            "driver_reviews_num": row.get("driver_reviews_num", ""),
                             "price_drop": row.get("price_drop", ""),
                         }
                     )
@@ -559,7 +583,7 @@ def create_app() -> Flask:
                     risk_pct = float(ap) * 100.0
                     annual_cost = int(round(mm * 12))
                     risk_level = get_risk_level(risk_pct)
-                    maint_level = get_maintenance_level(annual_cost)
+                    maint_level = get_maintenance_level(float(mm))
                     stock_results.append(
                         {
                             **car,
@@ -613,9 +637,7 @@ def create_app() -> Flask:
                 flash(e, "danger")
             return redirect(url_for("home"))
 
-        weights = parse_weights_from_form(criteria)
-        scores = ahp_score(cars, weights)
-
+        # Predict risk first, then filter high-risk cars out BEFORE AHP ranking.
         models = get_models()
         if not models:
             flash("Chưa có model. Admin hãy retrain hoặc chạy train.py trước.", "danger")
@@ -624,22 +646,60 @@ def create_app() -> Flask:
         else:
             accident_probs, maint_monthly = predict(models, cars)
 
-        results: List[Dict[str, Any]] = []
-        for idx, (s, ap, mm) in enumerate(zip(scores, accident_probs, maint_monthly), start=1):
-            option, badge, message = choose_option(s, ap, mm)
-            risk_pct = float(ap) * 100.0
-            annual_cost = int(round(mm * 12))
+        high_risk_idx = []
+        safe_idx = []
+        for i, ap in enumerate(accident_probs):
+            if float(ap) > 0.60:
+                high_risk_idx.append(i)
+            else:
+                safe_idx.append(i)
+
+        high_risk_results: List[Dict[str, Any]] = []
+        for i in high_risk_idx:
+            ap = float(accident_probs[i])
+            mm = float(maint_monthly[i])
+            # AHP score is not computed for high-risk cars (excluded from ranking)
+            option, badge, message = choose_option(0.0, ap, mm)
+            risk_pct = ap * 100.0
             risk_level = get_risk_level(risk_pct)
-            maint_level = get_maintenance_level(annual_cost)
-            results.append(
+            maint_level = get_maintenance_level(mm)
+            high_risk_results.append(
                 {
-                    "idx": idx,
-                    "ahp_score": float(s),
+                    "idx": i + 1,
+                    "ahp_score": 0.0,
                     "accident_risk_pct": risk_pct,
                     "risk_level_label": risk_level["label"],
                     "risk_level_badge": risk_level["badge_class"],
                     "maintenance_monthly": int(round(mm)),
-                    "maintenance_annual": annual_cost,
+                    "maintenance_level_label": maint_level["label"],
+                    "maintenance_level_badge": maint_level["badge_class"],
+                    "option": option,
+                    "badge": badge,
+                    "message": message,
+                }
+            )
+
+        weights = parse_weights_from_form(criteria)
+        safe_cars = [cars[i] for i in safe_idx]
+        safe_acc = [accident_probs[i] for i in safe_idx]
+        safe_maint = [maint_monthly[i] for i in safe_idx]
+        safe_scores = ahp_score(safe_cars, weights) if safe_cars else []
+
+        results: List[Dict[str, Any]] = []
+        for local_i, (s, ap, mm) in enumerate(zip(safe_scores, safe_acc, safe_maint)):
+            original_idx = safe_idx[local_i] + 1
+            option, badge, message = choose_option(float(s), float(ap), float(mm))
+            risk_pct = float(ap) * 100.0
+            risk_level = get_risk_level(risk_pct)
+            maint_level = get_maintenance_level(float(mm))
+            results.append(
+                {
+                    "idx": original_idx,
+                    "ahp_score": float(s),
+                    "accident_risk_pct": risk_pct,
+                    "risk_level_label": risk_level["label"],
+                    "risk_level_badge": risk_level["badge_class"],
+                    "maintenance_monthly": int(round(float(mm))),
                     "maintenance_level_label": maint_level["label"],
                     "maintenance_level_badge": maint_level["badge_class"],
                     "option": option,
@@ -662,6 +722,7 @@ def create_app() -> Flask:
             "index.html",
             criteria=criteria,
             results=results,
+            high_risk_results=high_risk_results,
             top_recommendations=top_recommendations,
             cars=cars,
             weights=weights,
@@ -745,10 +806,8 @@ def create_app() -> Flask:
             "mpg",
             "accidents_or_damage",
             "one_owner",
-            "personal_use_only",
             "seller_rating",
             "driver_rating",
-            "driver_reviews_num",
             "price_drop",
             "price",
         ]
@@ -777,10 +836,8 @@ def create_app() -> Flask:
                     "mpg": row.get("mpg", ""),
                     "accidents_or_damage": row.get("accidents_or_damage", ""),
                     "one_owner": row.get("one_owner", ""),
-                    "personal_use_only": row.get("personal_use_only", ""),
                     "seller_rating": row.get("seller_rating", ""),
                     "driver_rating": row.get("driver_rating", ""),
-                    "driver_reviews_num": row.get("driver_reviews_num", ""),
                     "price_drop": row.get("price_drop", ""),
                 }
             )
@@ -797,7 +854,7 @@ def create_app() -> Flask:
             risk_pct = float(ap) * 100.0
             annual_cost = int(round(mm * 12))
             risk_level = get_risk_level(risk_pct)
-            maint_level = get_maintenance_level(annual_cost)
+            maint_level = get_maintenance_level(float(mm))
             results.append(
                 {
                     **car,
@@ -994,8 +1051,6 @@ def create_app() -> Flask:
                     continue
                 car["accidents_or_damage"] = normalize_01(car.get("accidents_or_damage"), default=0)
                 car["one_owner"] = normalize_01(car.get("one_owner"), default=0)
-                if "personal_use_only" in car:
-                    car["personal_use_only"] = normalize_01(car.get("personal_use_only"), default=1)
                 # Ensure standards-compliant JSON for later API import.
                 car.update(sanitize_for_json(car))
         else:
@@ -1034,7 +1089,7 @@ def create_app() -> Flask:
                 s.add(
                     SavedCar(
                         user_id=int(current_user.get_id()),
-                        created_at=dt.datetime.utcnow(),
+                        created_at=dt.datetime.now(dt.timezone.utc),
                         title=title,
                         source=source,
                         car_json=json.dumps(sanitize_for_json(car), ensure_ascii=False, allow_nan=False),
@@ -1174,19 +1229,28 @@ def create_app() -> Flask:
         if not require_admin():
             return redirect(url_for("home"))
 
-        with session_scope(SessionLocal) as s:
-            items = s.query(CriteriaConfig).all()
-            for it in items:
-                raw = request.form.get(f"w_{it.key}")
-                if raw is None:
-                    continue
-                try:
-                    v = int(float(raw))
-                except Exception:
-                    continue
-                it.default_weight = max(1, min(9, v))
+        matrix_text = request.form.get("pairwise_matrix", "")
 
-        flash("Đã cập nhật trọng số mặc định.", "success")
+        with session_scope(SessionLocal) as s:
+            items = s.query(CriteriaConfig).order_by(CriteriaConfig.id.asc()).all()
+            keys = [it.key for it in items]
+            n = len(keys)
+
+            try:
+                mat = parse_pairwise_matrix_text(matrix_text, n)
+                res = compute_ahp_weights(mat)
+            except Exception as e:
+                flash(f"Ma trận AHP không hợp lệ: {e}", "danger")
+                return redirect(url_for("admin"))
+
+            if not res.is_valid:
+                flash(f"Ma trận AHP không nhất quán (CR={res.cr:.3f} >= 0.100). Vui lòng nhập lại.", "danger")
+                return redirect(url_for("admin"))
+
+            for it, w in zip(items, res.weights):
+                it.default_weight = float(w)
+
+        flash("Đã cập nhật trọng số mặc định (AHP).", "success")
         return redirect(url_for("admin"))
 
     @app.post("/admin/retrain")
@@ -1198,7 +1262,27 @@ def create_app() -> Flask:
         csv_path = Path(settings.cars_csv_path)
         uploaded = request.files.get("csv_file")
         if uploaded and uploaded.filename:
-            csv_path = Path("./data") / "cars_uploaded.csv"
+            filename = secure_filename(uploaded.filename)
+            if not filename.lower().endswith(".csv"):
+                flash("Chỉ cho phép upload file .csv", "danger")
+                return redirect(url_for("admin"))
+
+            # Enforce per-file size limit (in addition to MAX_CONTENT_LENGTH)
+            max_bytes = int(app.config.get("MAX_CONTENT_LENGTH") or (5 * 1024 * 1024))
+            try:
+                uploaded.stream.seek(0, os.SEEK_END)
+                size = int(uploaded.stream.tell())
+                uploaded.stream.seek(0)
+            except Exception:
+                size = int(request.content_length or 0)
+
+            if size and size > max_bytes:
+                flash(f"File quá lớn ({size // 1024}KB). Giới hạn {max_bytes // (1024 * 1024)}MB.", "danger")
+                return redirect(url_for("admin"))
+
+            # Save with a timestamped name to avoid overwriting.
+            ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
+            csv_path = Path("./data") / f"cars_uploaded_{ts}.csv"
             csv_path.parent.mkdir(parents=True, exist_ok=True)
             uploaded.save(str(csv_path))
 
@@ -1211,7 +1295,7 @@ def create_app() -> Flask:
                 str(csv_path),
                 "--out",
                 settings.model_path,
-            ])
+            ], timeout=600)
             flash("Retrain thành công.", "success")
         except Exception as e:
             flash(f"Retrain thất bại: {e}", "danger")

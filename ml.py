@@ -74,6 +74,124 @@ def normalize_weights(raw: Dict[str, float]) -> Dict[str, float]:
     return {k: v / s for k, v in weights.items()}
 
 
+@dataclass(frozen=True)
+class AHPResult:
+    weights: List[float]
+    cr: float
+    ci: float
+    lambda_max: float
+    is_valid: bool
+
+
+_SAATY_RI: Dict[int, float] = {
+    1: 0.00,
+    2: 0.00,
+    3: 0.58,
+    4: 0.90,
+    5: 1.12,
+    6: 1.24,
+    7: 1.32,
+    8: 1.41,
+    9: 1.45,
+    10: 1.49,
+}
+
+
+def compute_ahp_weights(matrix: Any) -> AHPResult:
+    """Compute AHP weights using Saaty's method.
+
+    Steps:
+    1) Normalize each column of the pairwise comparison matrix.
+    2) Take the average of each row => priority (weights) vector.
+    3) Compute Consistency Ratio (CR). If CR >= 0.1, consider invalid.
+
+    Returns:
+        AHPResult(weights, cr, ci, lambda_max, is_valid)
+    """
+
+    a = np.asarray(matrix, dtype=float)
+    if a.ndim != 2 or a.shape[0] != a.shape[1]:
+        raise ValueError("matrix must be a square n x n array")
+
+    n = int(a.shape[0])
+    if n == 0:
+        raise ValueError("matrix must be non-empty")
+
+    if not np.isfinite(a).all():
+        raise ValueError("matrix contains NaN/Inf")
+    if (a <= 0).any():
+        raise ValueError("matrix entries must be > 0")
+
+    col_sum = a.sum(axis=0)
+    if (col_sum <= 0).any():
+        raise ValueError("matrix has a zero-sum column")
+
+    norm = a / col_sum
+    w = norm.mean(axis=1)
+    w_sum = float(w.sum())
+    if not math.isfinite(w_sum) or w_sum <= 0:
+        raise ValueError("failed to compute a valid weight vector")
+    w = w / w_sum
+
+    # Consistency
+    aw = a.dot(w)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratios = np.where(w > 0, aw / w, np.nan)
+    lambda_max = float(np.nanmean(ratios))
+
+    if n < 3:
+        ci = 0.0
+    else:
+        ci = float((lambda_max - n) / (n - 1))
+
+    ri = float(_SAATY_RI.get(n, _SAATY_RI[10]))
+    cr = 0.0 if ri <= 0 else float(ci / ri)
+    is_valid = bool(cr < 0.1)
+
+    return AHPResult(
+        weights=[float(x) for x in w.tolist()],
+        cr=cr,
+        ci=ci,
+        lambda_max=lambda_max,
+        is_valid=is_valid,
+    )
+
+
+def parse_pairwise_matrix_text(text: str, n: int) -> np.ndarray:
+    """Parse an n x n pairwise comparison matrix from a textarea.
+
+    Accepts separators: whitespace and/or commas.
+    Supports fractions like "1/3".
+    """
+
+    if n <= 0:
+        raise ValueError("n must be > 0")
+    if text is None:
+        raise ValueError("matrix text is empty")
+
+    lines = [ln.strip() for ln in str(text).strip().splitlines() if ln.strip()]
+    if len(lines) != n:
+        raise ValueError(f"expected {n} rows, got {len(lines)}")
+
+    def parse_token(tok: str) -> float:
+        t = tok.strip()
+        if not t:
+            raise ValueError("empty token")
+        if "/" in t:
+            a, b = t.split("/", 1)
+            return float(a) / float(b)
+        return float(t)
+
+    rows: List[List[float]] = []
+    for ln in lines:
+        parts = [p for p in re.split(r"[\s,;]+", ln) if p]
+        if len(parts) != n:
+            raise ValueError(f"each row must have {n} values")
+        rows.append([parse_token(p) for p in parts])
+
+    return np.asarray(rows, dtype=float)
+
+
 def _minmax(values: List[Optional[float]], direction: str) -> List[float]:
     xs = [v for v in values if v is not None and not math.isnan(float(v))]
     if not xs:
@@ -181,28 +299,44 @@ def ahp_score_dataframe(df, weights: Dict[str, float]):
 
 
 def predict(models: LoadedModels, cars: List[Dict[str, Any]]) -> Tuple[List[float], List[float]]:
-    # Build a minimal feature set. Categorical features are not required for the UI input.
-    # Training will create the same columns; missing columns will be handled by the preprocessor.
+    # Build feature rows aligned to training metadata.
+    # We always create all raw columns expected by the preprocessor, and fill missing
+    # values with None so the imputer can handle them.
+    meta_features = models.meta.get("feature_cols") or models.meta.get("features")
+    feature_cols = list(meta_features) if isinstance(meta_features, (list, tuple)) and meta_features else [
+        "year",
+        "mileage",
+        "mpg",
+        "one_owner",
+        "seller_rating",
+        "driver_rating",
+        "price_drop",
+        "price",
+    ]
+
     rows: List[Dict[str, Any]] = []
     for car in cars:
-        rows.append(
-            {
-                "year": _to_float(car.get("year")),
-                "mileage": _to_float(car.get("mileage")),
-                "mpg": parse_mpg(car.get("mpg")),
-                "one_owner": _to_float(car.get("one_owner")),
-                "personal_use_only": _to_float(car.get("personal_use_only")) if car.get("personal_use_only") is not None else 1.0,
-                "seller_rating": _to_float(car.get("seller_rating")),
-                "driver_rating": _to_float(car.get("driver_rating")),
-                "driver_reviews_num": _to_float(car.get("driver_reviews_num")) if car.get("driver_reviews_num") is not None else 0.0,
-                "price_drop": _to_float(car.get("price_drop")),
-                "price": _to_float(car.get("price")),
-            }
-        )
+        row = {
+            "year": _to_float(car.get("year")),
+            "mileage": _to_float(car.get("mileage")),
+            "mpg": parse_mpg(car.get("mpg")),
+            "one_owner": _to_float(car.get("one_owner")),
+            "seller_rating": _to_float(car.get("seller_rating")),
+            "driver_rating": _to_float(car.get("driver_rating")),
+            "price_drop": _to_float(car.get("price_drop")),
+            "price": _to_float(car.get("price")),
+        }
+
+        # Ensure all expected columns exist.
+        for col in feature_cols:
+            if col not in row:
+                row[col] = None
+
+        rows.append({k: row.get(k) for k in feature_cols})
 
     import pandas as pd  # lazy import
 
-    X = pd.DataFrame(rows)
+    X = pd.DataFrame(rows, columns=feature_cols)
     Xp = models.preprocessor.transform(X)
 
     # Accident risk probability
@@ -224,26 +358,47 @@ def _to_float(v: Any) -> Optional[float]:
 
 
 def choose_option(ahp: float, accident_risk: float, maint_monthly: float) -> Tuple[str, str, str]:
-    # Simple decision rules. You can tune thresholds in admin later.
-    # accident_risk in [0,1]
-    accident_pct = accident_risk * 100.0
+    """Decision logic with risk-first rule and more realistic AHP thresholds.
 
-    if accident_pct <= 25.0 and maint_monthly <= 220.0 and ahp >= 0.60:
+    Rules:
+    - If accident risk > 60% => red (reject/warn)
+    - Otherwise, use a softer scoring based on AHP + risk + maintenance.
+    """
+
+    accident_risk = float(accident_risk) if math.isfinite(float(accident_risk)) else 1.0
+    maint_monthly = float(maint_monthly) if math.isfinite(float(maint_monthly)) else 1e9
+    ahp = float(ahp) if math.isfinite(float(ahp)) else 0.0
+
+    accident_pct = accident_risk * 100.0
+    if accident_risk > 0.60:
         return (
-            "Phương án 1: NÊN MUA NGAY",
-            "green",
-            "Ưu tiên cao. Liên hệ người bán sớm.",
+            "Phương án 3: RỦI RO TAI NẠN CAO",
+            "red",
+            f"Rủi ro tai nạn {accident_pct:.0f}% > 60%. Nên loại hoặc kiểm tra lịch sử tai nạn rất kỹ.",
         )
-    if accident_pct <= 55.0 and maint_monthly <= 350.0:
+
+    # Soft composite score (bounded) to avoid brittle hard thresholds.
+    # AHP in [0,1], risk in [0,1], maint roughly [25..900] USD/month.
+    maint_pen = min(1.0, max(0.0, maint_monthly / 500.0))
+    composite = (0.62 * ahp) + (0.28 * (1.0 - accident_risk)) + (0.10 * (1.0 - maint_pen))
+
+    # Practical recommendation bands.
+    if ahp >= 0.45 and composite >= 0.58:
+        return (
+            "Phương án 1: NÊN MUA (ƯU TIÊN)",
+            "green",
+            "Điểm AHP tốt và rủi ro/chi phí hợp lý. Ưu tiên thương lượng và kiểm tra nhanh.",
+        )
+    if composite >= 0.48:
         return (
             "Phương án 2: CẦN CÂN NHẮC",
             "yellow",
-            "So sánh thêm và mang xe kiểm tra tại gara.",
+            "Khá ổn nhưng nên so sánh thêm và kiểm định tại gara trước khi chốt.",
         )
     return (
-        "Phương án 3: RỦI RO CAO",
+        "Phương án 3: RỦI RO/CHI PHÍ CAO",
         "red",
-        "Rủi ro kỹ thuật cao hoặc chi phí quá lớn.",
+        "Điểm tổng hợp thấp do rủi ro hoặc chi phí bảo dưỡng cao. Nên tìm lựa chọn khác.",
     )
 
 

@@ -3,10 +3,14 @@ from __future__ import annotations
 import datetime as dt
 
 from flask_login import UserMixin
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db import Base
+
+
+def utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
 
 
 class User(Base, UserMixin):
@@ -23,7 +27,7 @@ class RecommendationHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     car_count: Mapped[int] = mapped_column(Integer, nullable=False)
     summary: Mapped[str] = mapped_column(String(400), nullable=False)
@@ -35,7 +39,7 @@ class SavedCar(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")  # manual | stock
@@ -49,4 +53,4 @@ class CriteriaConfig(Base):
     key: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     direction: Mapped[str] = mapped_column(String(16), nullable=False)  # 'benefit' | 'cost'
-    default_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    default_weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

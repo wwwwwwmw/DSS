@@ -25,28 +25,30 @@
 <div class="card">
     <h3>Tiêu chí & trọng số mặc định</h3>
     <form method="post" action="{{ url_for('admin_update_criteria') }}">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Tiêu chí</th>
-                    <th>Direction</th>
-                    <th>Weight (1-9)</th>
-                </tr>
-            </thead>
-            <tbody>
+        <div class="small">
+            Nhập <b>ma trận so sánh cặp (AHP Saaty)</b> kích thước n×n theo đúng thứ tự tiêu chí bên dưới.
+            Giá trị là số &gt; 0 (có thể dùng phân số như <code>1/3</code>). Đường chéo chính = 1.
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Thứ tự tiêu chí (n={{ criteria|length }})</label>
+            <div class="small">
                 {% for c in criteria %}
-                <tr>
-                    <td>{{ c.label }}</td>
-                    <td>{{ c.direction }}</td>
-                    <td style="max-width:160px">
-                        <input type="number" min="1" max="9" name="w_{{ c.key }}" value="{{ c.default_weight }}"
-                            required />
-                    </td>
-                </tr>
+                {{ loop.index }}. {{ c.key }}{% if not loop.last %} • {% endif %}
                 {% endfor %}
-            </tbody>
-        </table>
-        <button class="btn" type="submit">Lưu trọng số</button>
+            </div>
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Ma trận AHP (mỗi dòng 1 hàng, cách nhau bởi dấu cách hoặc dấu phẩy)</label>
+            <textarea name="pairwise_matrix" rows="10" style="width:100%" placeholder="vd (3 tiêu chí):
+1, 3, 5
+1/3, 1, 2
+1/5, 1/2, 1"></textarea>
+            <div class="hint">Nếu CR &ge; 0.1 hệ thống sẽ báo không hợp lệ.</div>
+        </div>
+
+        <button class="btn" type="submit">Tính & lưu trọng số (AHP)</button>
     </form>
 </div>
 

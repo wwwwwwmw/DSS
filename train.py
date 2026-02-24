@@ -11,10 +11,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
 from sklearn.utils.class_weight import compute_class_weight
 
 
@@ -42,15 +44,30 @@ def parse_mpg_series(s: pd.Series) -> pd.Series:
 
 
 def make_synthetic_maintenance(df: pd.DataFrame, year_now: int = 2026) -> pd.Series:
-    # Synthetic target for demo purposes ONLY.
-    age = (year_now - df["year"].fillna(year_now)).clip(lower=0)
-    mileage_k = (df["mileage"].fillna(0) / 1000.0).clip(lower=0)
-    accidents = df["accidents_or_damage"].fillna(0).clip(lower=0, upper=1)
-    one_owner = df["one_owner"].fillna(0).clip(lower=0, upper=1)
+    """Synthetic maintenance cost target (USD/month) for demo purposes ONLY.
 
-    base = 70.0 + age * 6.0 + mileage_k * 2.5 + accidents * 55.0 + (1 - one_owner) * 8.0
-    noise = np.random.default_rng(42).normal(0, 12.0, size=len(df))
-    return (base + noise).clip(lower=30.0)
+    Formula (requested):
+    - Base by age: $8/month per year of age
+    - Base by mileage: $0.3/month per 1000 miles
+    - Heavy penalty if accidents: +$40/month
+    - Add reasonable noise
+    """
+
+    rng = np.random.default_rng(42)
+
+    year = pd.to_numeric(df.get("year"), errors="coerce").fillna(year_now)
+    mileage = pd.to_numeric(df.get("mileage"), errors="coerce").fillna(0)
+    accidents = pd.to_numeric(df.get("accidents_or_damage"), errors="coerce").fillna(0).clip(0, 1)
+
+    age = (year_now - year).clip(lower=0)
+    mileage_k = (mileage / 1000.0).clip(lower=0)
+
+    base = (age * 8.0) + (mileage_k * 0.3)
+    base = base + (accidents * 40.0)
+
+    noise = rng.normal(0.0, 10.0, size=len(df))
+    out = (base + noise).clip(lower=25.0, upper=900.0)
+    return out
 
 
 def _fmt_seconds(sec: float) -> str:
@@ -97,29 +114,28 @@ def train(
     try:
         logger.info("Reading CSV: %s", cars_csv)
 
-        # For speed on large files: use only columns needed by UI (numeric-focused).
-        feature_cols = [
+        # Raw input columns (must be preserved in meta to keep predict() aligned).
+        numeric_features = [
             "year",
             "mileage",
             "mpg",
             "one_owner",
-            "personal_use_only",
             "seller_rating",
             "driver_rating",
-            "driver_reviews_num",
             "price_drop",
             "price",
         ]
+        categorical_features: list[str] = []
+        feature_cols = list(numeric_features)
         usecols = feature_cols + ["accidents_or_damage"]
 
         dtype_map = {
             "year": "float64",
             "mileage": "float64",
+            "mpg": "string",
             "one_owner": "float64",
-            "personal_use_only": "float64",
             "seller_rating": "float64",
             "driver_rating": "float64",
-            "driver_reviews_num": "float64",
             "price_drop": "float64",
             "price": "float64",
             "accidents_or_damage": "float64",
@@ -155,8 +171,18 @@ def train(
 
         X = df[feature_cols].copy()
 
-        # Preprocess numeric only
-        preprocessor = SimpleImputer(strategy="median")
+        numeric_transformer = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+            ]
+        )
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, numeric_features),
+            ],
+            remainder="drop",
+            verbose_feature_names_out=False,
+        )
 
         X_train, X_test, yA_train, yA_test, yM_train, yM_test = train_test_split(
             X,
@@ -231,7 +257,17 @@ def train(
                 "trained_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 "cars_csv": str(cars_csv),
                 "note": "Maintenance target is SYNTHETIC for demo.",
+                # Backward-compatible key + explicit raw feature order.
                 "features": feature_cols,
+                "feature_cols": feature_cols,
+                "numeric_features": numeric_features,
+                "categorical_features": categorical_features,
+                # Useful for debugging transformed feature order.
+                "feature_names_out": (
+                    preprocessor.get_feature_names_out().tolist()
+                    if hasattr(preprocessor, "get_feature_names_out")
+                    else None
+                ),
                 "log_file": str(log_file),
             },
         }

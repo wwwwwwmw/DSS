@@ -7,12 +7,12 @@
 
 <div class="card">
     <form method="post" action="{{ url_for('recommend') }}">
-        <h3>1) Chấm điểm mức độ quan trọng (1-9)</h3>
+        <h3>1) Trọng số tiêu chí (số &ge; 0)</h3>
         <div class="grid">
             {% for c in criteria %}
             <div class="col-3">
                 <label>{{ c.label }}</label>
-                <input type="number" min="1" max="9" name="w_{{ c.key }}" value="{{ c.default }}" required />
+                <input type="number" min="0" step="0.01" name="w_{{ c.key }}" value="{{ c.default }}" required />
             </div>
             {% endfor %}
         </div>
@@ -217,6 +217,31 @@
         <li>Xe #{{ r.idx }} — {{ r.message }}</li>
         {% endfor %}
     </ul>
+    {% endif %}
+
+    {% if high_risk_results %}
+    <h4 style="margin-top:16px;">Xe rủi ro cao (lọc ra trước khi xếp hạng)</h4>
+    <div class="small">Các xe có rủi ro tai nạn &gt; 60% sẽ không được đưa vào AHP ranking.</div>
+    <table class="table" style="margin-top:10px;">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Rủi ro tai nạn (ML)</th>
+                <th>Chi phí bảo dưỡng (ML)</th>
+                <th>Gợi ý</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in high_risk_results %}
+            <tr>
+                <td>{{ r.idx }}</td>
+                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
+                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
+                <td>{{ r.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     {% endif %}
 </div>
 {% endif %}

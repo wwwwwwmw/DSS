@@ -11,7 +11,16 @@ class Base(DeclarativeBase):
 
 
 def create_session_factory(database_url: str):
-    engine = create_engine(database_url, future=True)
+    engine_kwargs = {"future": True}
+    # SQL Server: keep pooled connections healthy over long-running app.
+    if str(database_url).startswith("mssql"):
+        engine_kwargs.update(
+            {
+                "pool_pre_ping": True,
+                "pool_recycle": 1800,
+            }
+        )
+    engine = create_engine(database_url, **engine_kwargs)
     SessionLocal = sessionmaker(
         bind=engine,
         autoflush=False,
