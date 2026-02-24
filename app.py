@@ -24,6 +24,9 @@ from ml import (
     ahp_score_dataframe,
     choose_option,
     compute_ahp_weights,
+    evaluate_market_position,
+    generate_explanation,
+    load_market_stats,
     load_models,
     normalize_weights,
     parse_mpg,
@@ -173,6 +176,22 @@ def create_app() -> Flask:
 
     def get_models():
         return load_models(settings.model_path)
+
+    # ------------------------------------------------------------------
+    # Market stats cache (loaded once at startup, refreshed on retrain)
+    # ------------------------------------------------------------------
+    _market_stats_cache: Dict[str, Any] = {}
+
+    def get_market_stats() -> Optional[Dict[str, Dict[str, float]]]:
+        if "stats" not in _market_stats_cache:
+            _market_stats_cache["stats"] = load_market_stats(settings.cars_csv_path)
+        return _market_stats_cache.get("stats")
+
+    def refresh_market_stats() -> None:
+        _market_stats_cache["stats"] = load_market_stats(settings.cars_csv_path)
+
+    # Eager-load on startup
+    get_market_stats()
 
     def _safe_json_loads(s: str) -> Any:
         try:
@@ -448,7 +467,7 @@ def create_app() -> Flask:
 
     @app.route("/evaluate", methods=["GET", "POST"])
     def evaluate():
-        """Đánh giá xe ngoài (tối thiểu 1 xe) và có thể so sánh với xe trong kho. Khách vãng lai có thể truy cập."""
+        """Đánh giá thị trường: so sánh xe của người dùng với kho CSV (market stats)."""
 
         criteria = load_criteria()
         if request.method == "GET":
@@ -458,10 +477,6 @@ def create_app() -> Flask:
                 results=None,
                 cars=None,
                 weights=None,
-                compare_stock=False,
-                stock_info=None,
-                stock_results=None,
-                top_n=10,
             )
 
         cars = parse_cars_from_form()
@@ -482,13 +497,28 @@ def create_app() -> Flask:
         else:
             accident_probs, maint_monthly = predict(models, cars)
 
+        market_stats = get_market_stats()
+
         results: List[Dict[str, Any]] = []
-        for idx, (s, ap, mm) in enumerate(zip(scores, accident_probs, maint_monthly), start=1):
-            option, badge, message = choose_option(s, ap, mm)
+        for idx, (car, s, ap, mm) in enumerate(
+            zip(cars, scores, accident_probs, maint_monthly), start=1
+        ):
             risk_pct = float(ap) * 100.0
             annual_cost = int(round(mm * 12))
             risk_level = get_risk_level(risk_pct)
             maint_level = get_maintenance_level(float(mm))
+
+            explanation = None
+            percentile = None
+            if market_stats:
+                mkt_pos = evaluate_market_position(car, market_stats, weights)
+                percentile = mkt_pos["overall_percentile"]
+                explanation = generate_explanation(
+                    car, market_stats, float(ap), float(mm), mkt_pos, float(s),
+                )
+
+            option, badge, message = choose_option(float(s), float(ap), float(mm), percentile=percentile)
+
             results.append(
                 {
                     "idx": idx,
@@ -503,116 +533,22 @@ def create_app() -> Flask:
                     "option": option,
                     "badge": badge,
                     "message": message,
+                    "explanation": explanation,
                 }
             )
-
-        compare_stock = (request.form.get("compare_stock") or "").strip() in {"1", "true", "on", "yes"}
-        stock_info = None
-        stock_results = None
-        top_n = 10
-
-        if compare_stock:
-            top_n_raw = request.form.get("top_n", "10")
-            try:
-                top_n = int(float(top_n_raw))
-            except Exception:
-                top_n = 10
-            top_n = max(1, min(50, top_n))
-
-            import pandas as pd
-
-            usecols = [
-                "manufacturer",
-                "model",
-                "year",
-                "mileage",
-                "mpg",
-                "accidents_or_damage",
-                "one_owner",
-                "seller_rating",
-                "driver_rating",
-                "price_drop",
-                "price",
-            ]
-
-            try:
-                df = pd.read_csv(settings.cars_csv_path, usecols=usecols, low_memory=False)
-            except Exception as e:
-                flash(f"Không đọc được cars.csv để so sánh: {e}", "danger")
-                df = None
-
-            if df is not None and not df.empty:
-                df_score = df.copy()
-                stock_scores = ahp_score_dataframe(df_score, weights)
-                df_score["_ahp_score"] = stock_scores
-
-                # Percentile for each outside car
-                percents = []
-                for car in cars:
-                    s_ref = ahp_score_single_against_df(car, weights, df_score)
-                    pct = float((stock_scores <= s_ref).mean()) * 100.0
-                    percents.append({"ahp_ref": float(s_ref), "percentile": pct})
-
-                top = df_score.nlargest(top_n, "_ahp_score")
-                top_cars: List[Dict[str, Any]] = []
-                for _, row in top.iterrows():
-                    top_cars.append(
-                        {
-                            "title": f"{row.get('manufacturer', '')} {row.get('model', '')}".strip(),
-                            "year": row.get("year", ""),
-                            "mileage": row.get("mileage", ""),
-                            "price": row.get("price", ""),
-                            "ahp_score": float(row.get("_ahp_score", 0.0)),
-                            "mpg": row.get("mpg", ""),
-                            "accidents_or_damage": row.get("accidents_or_damage", ""),
-                            "one_owner": row.get("one_owner", ""),
-                            "seller_rating": row.get("seller_rating", ""),
-                            "driver_rating": row.get("driver_rating", ""),
-                            "price_drop": row.get("price_drop", ""),
-                        }
-                    )
-
-                if models:
-                    ap2, mm2 = predict(models, top_cars)
-                else:
-                    ap2 = [0.5 for _ in top_cars]
-                    mm2 = [300.0 for _ in top_cars]
-
-                stock_results = []
-                for car, ap, mm in zip(top_cars, ap2, mm2):
-                    risk_pct = float(ap) * 100.0
-                    annual_cost = int(round(mm * 12))
-                    risk_level = get_risk_level(risk_pct)
-                    maint_level = get_maintenance_level(float(mm))
-                    stock_results.append(
-                        {
-                            **car,
-                            "accident_risk_pct": risk_pct,
-                            "risk_level_label": risk_level["label"],
-                            "risk_level_badge": risk_level["badge_class"],
-                            "maintenance_monthly": int(round(mm)),
-                            "maintenance_annual": annual_cost,
-                            "maintenance_level_label": maint_level["label"],
-                            "maintenance_level_badge": maint_level["badge_class"],
-                        }
-                    )
-
-                stock_info = {
-                    "top_n": top_n,
-                    "percents": percents,
-                }
 
         # History
         payload = {
             "weights": weights,
             "cars": cars,
-            "results": results,
-            "compare_stock": compare_stock,
-            "stock_info": stock_info,
+            "results": [
+                {k: v for k, v in r.items() if k != "explanation"}
+                for r in results
+            ],
         }
         summary = "Đánh giá: Đã tính cho 1 xe" if len(cars) == 1 else f"Đánh giá: {len(cars)} xe"
-        if compare_stock:
-            summary += f" • so với kho Top {top_n}"
+        if market_stats:
+            summary += " • so với thị trường"
         save_history(action="evaluate", cars=cars, payload=payload, summary=summary)
 
         return render_template(
@@ -621,10 +557,6 @@ def create_app() -> Flask:
             results=results,
             cars=cars,
             weights=weights,
-            compare_stock=compare_stock,
-            stock_info=stock_info,
-            stock_results=stock_results,
-            top_n=top_n,
         )
 
     @app.post("/recommend")
@@ -1296,6 +1228,7 @@ def create_app() -> Flask:
                 "--out",
                 settings.model_path,
             ], timeout=600)
+            refresh_market_stats()
             flash("Retrain thành công.", "success")
         except Exception as e:
             flash(f"Retrain thất bại: {e}", "danger")

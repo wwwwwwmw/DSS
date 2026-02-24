@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="card">
-    <h2>Đánh giá xe ngoài (tối thiểu 1 xe)</h2>
-    <div class="small">Bạn có thể nhập 1 xe (ngoài kho) và chọn <b>So sánh với xe trong kho</b> để xem xe của bạn đang
-        ở mức nào so với dataset.</div>
+    <h2>Đánh giá thị trường (So sánh xe với kho dữ liệu)</h2>
+    <div class="small">Nhập thông tin xe và hệ thống sẽ so sánh với toàn bộ kho dữ liệu (cars.csv), tự động
+        gán nhãn 🟢/🟡/🔴 kèm lời giải thích chi tiết.</div>
 </div>
 
 <div class="card">
@@ -220,117 +220,93 @@
             </template>
         </div>
 
-        <h3>3) So sánh với xe trong kho (tuỳ chọn)</h3>
-        <div class="grid">
-            <div class="col-6">
-                <label style="display:flex; align-items:center; gap:10px;">
-                    <input type="checkbox" name="compare_stock" value="1" {% if compare_stock %}checked{% endif %} />
-                    So sánh với xe trong kho (cars.csv)
-                </label>
-                <div class="hint">Nếu bật, hệ thống sẽ chấm điểm toàn bộ kho để lấy Top N và ước lượng vị trí xe của bạn
-                    trong kho. Có thể mất thời gian nếu dataset lớn.</div>
-            </div>
-            <div class="col-3">
-                <label>Top N</label>
-                <input type="number" min="1" max="50" name="top_n" value="{{ top_n or 10 }}" />
-            </div>
-        </div>
-
-        <button class="btn" type="submit">Đánh giá xe</button>
+        <button class="btn" type="submit">Đánh giá thị trường</button>
     </form>
 </div>
 
 {% if results %}
 <div class="card">
-    <h3>Kết quả đánh giá</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>AHP</th>
-                <th>Rủi ro tai nạn (ML)</th>
-                <th>Bảo dưỡng (ML)</th>
-                <th>Kết luận</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in results %}
-            <tr>
-                <td>{{ r.idx }}</td>
-                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
-                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
-                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
-                <td>
-                    {% if r.badge == 'green' %}
-                    <span class="badge green">Đáng mua</span>
-                    {% elif r.badge == 'yellow' %}
-                    <span class="badge yellow">Cân nhắc</span>
-                    {% else %}
-                    <span class="badge red">Không nên mua</span>
-                    {% endif %}
-                    <div class="small">{{ r.message }}</div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <h3>Kết quả đánh giá thị trường</h3>
 
-    {% if compare_stock and stock_info and stock_info.percents %}
-    <div style="margin-top:10px;" class="small">
-        <b>So với xe trong kho:</b>
-        {% for p in stock_info.percents %}
-        <div>Xe #{{ loop.index }}: AHP tham chiếu = {{ '%.3f'|format(p.ahp_ref) }} • cao hơn khoảng {{
-            '%.1f'|format(p.percentile) }}% xe trong kho.</div>
-        {% endfor %}
-    </div>
+    {% for r in results %}
+
+    {# --- BƯỚC 1: Xác định màu sắc (Logic Jinja) --- #}
+    {% set border_color = '#dc3545' %}
+    {% if r.badge == 'green' %}
+    {% set border_color = '#28a745' %}
+    {% elif r.badge == 'yellow' %}
+    {% set border_color = '#ffc107' %}
     {% endif %}
-</div>
-{% endif %}
 
-{% if compare_stock and stock_results %}
-<div class="card">
-    <h3>Gợi ý xe trong kho (Top {{ stock_results|length }})</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Xe</th>
-                <th>Năm</th>
-                <th>Giá</th>
-                <th>Mileage</th>
-                <th>AHP</th>
-                <th>Rủi ro tai nạn (ML)</th>
-                <th>Bảo dưỡng (ML)</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in stock_results %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ r.title }}</td>
-                <td>{{ r.year }}</td>
-                <td>{{ r.price }}</td>
-                <td>{{ r.mileage }}</td>
-                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
-                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
-                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
-                <td>
-                    {% if current_user.is_authenticated %}
-                    <form method="post" action="{{ url_for('save_my_cars') }}">
-                        <input type="hidden" name="source" value="stock" />
-                        <input type="hidden" name="return_to" value="{{ url_for('evaluate') }}" />
-                        <textarea name="car_json" style="display:none">{{ r|tojson }}</textarea>
-                        <button class="btn secondary" type="submit">Lưu</button>
-                    </form>
-                    {% else %}
-                    <a class="btn secondary" href="{{ url_for('login') }}">Đăng nhập</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {# --- BƯỚC 2: Tạo toàn bộ chuỗi style="..." vào một biến --- #}
+    {# Kỹ thuật này giúp VS Code không nhìn thấy chữ 'style' trực tiếp, nên sẽ không báo lỗi CSS #}
+    {% set card_attr = 'style="margin:12px 0; border-left:5px solid ' ~ border_color ~ '; padding:16px;"' %}
+
+    {# --- BƯỚC 3: Xuất biến ra HTML với bộ lọc |safe --- #}
+    <div class="card" {{ card_attr|safe }}>
+
+        <h4 style="margin:0 0 6px 0;">Xe #{{ r.idx }}</h4>
+
+        {% if r.explanation %}
+        {# --- Label + summary metrics --- #}
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+            <span style="font-size:1.35em; font-weight:bold;">{{ r.explanation.label }}</span>
+            <span class="small" style="opacity:.85;">
+                AHP: {{ '%.3f'|format(r.explanation.ahp_score) }} &nbsp;|&nbsp;
+                AI Risk: {{ '%.0f'|format(r.explanation.ai_risk_pct) }}% &nbsp;|&nbsp;
+                Percentile: {{ '%.0f'|format(r.explanation.percentile) }}%
+            </span>
+        </div>
+
+        {# --- Pros (✅) --- #}
+        {% if r.explanation.pros %}
+        {% for p in r.explanation.pros %}
+        <div style="margin:3px 0;">✅ {{ p }}</div>
+        {% endfor %}
+        {% endif %}
+
+        {# --- Cons (⚠️) --- #}
+        {% if r.explanation.cons %}
+        {% for c in r.explanation.cons %}
+        <div style="margin:3px 0;">⚠️ {{ c }}</div>
+        {% endfor %}
+        {% endif %}
+
+        {# --- Summary --- #}
+        <div class="small" style="margin-top:10px; font-style:italic;">{{ r.explanation.summary }}</div>
+        {% else %}
+        {# Fallback when market stats not available #}
+        <div style="margin-bottom:6px;">
+            {% if r.badge == 'green' %}
+            <span class="badge green">Đáng mua</span>
+            {% elif r.badge == 'yellow' %}
+            <span class="badge yellow">Cân nhắc</span>
+            {% else %}
+            <span class="badge red">Không nên mua</span>
+            {% endif %}
+            <span class="small">AHP: {{ '%.3f'|format(r.ahp_score) }}</span>
+        </div>
+        <div class="small">{{ r.message }}</div>
+        {% endif %}
+
+        {# --- Detail badges --- #}
+        <div style="margin-top:8px; display:flex; gap:10px; flex-wrap:wrap;">
+            <span class="badge {{ r.risk_level_badge }}">Rủi ro: {{ r.risk_level_label }}</span>
+            <span class="badge {{ r.maintenance_level_badge }}">Bảo dưỡng: {{ r.maintenance_level_label }}</span>
+        </div>
+
+        {% if current_user.is_authenticated and cars %}
+        <div style="margin-top:8px;">
+            <form method="post" action="{{ url_for('save_my_cars') }}" style="display:inline;">
+                <input type="hidden" name="source" value="manual" />
+                <input type="hidden" name="title" value="Xe #{{ r.idx }}" />
+                <textarea name="car_json" style="display:none">{{ cars[r.idx-1]|tojson }}</textarea>
+                <button class="btn secondary" type="submit">Lưu xe</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 

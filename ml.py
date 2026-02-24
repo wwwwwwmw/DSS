@@ -298,6 +298,242 @@ def ahp_score_dataframe(df, weights: Dict[str, float]):
     return score
 
 
+# ---------------------------------------------------------------------------
+# Market Stats & Explanation Functions
+# ---------------------------------------------------------------------------
+
+def load_market_stats(csv_path: str) -> Optional[Dict[str, Dict[str, float]]]:
+    """Load market statistics (min/max/mean/median/count) for each of the 9 criteria from CSV.
+
+    Returns ``None`` if the CSV cannot be read.
+    """
+    import pandas as pd
+
+    try:
+        df = pd.read_csv(csv_path, low_memory=False)
+    except Exception:
+        return None
+
+    stats: Dict[str, Dict[str, float]] = {}
+    for c in CRITERIA:
+        key = c["key"]
+        if key not in df.columns:
+            stats[key] = {"min": 0.0, "max": 0.0, "mean": 0.0, "median": 0.0, "count": 0}
+            continue
+
+        col = parse_mpg_series(df[key]) if key == "mpg" else pd.to_numeric(df[key], errors="coerce")
+        valid = col.dropna()
+
+        if valid.empty:
+            stats[key] = {"min": 0.0, "max": 0.0, "mean": 0.0, "median": 0.0, "count": 0}
+        else:
+            stats[key] = {
+                "min": float(valid.min()),
+                "max": float(valid.max()),
+                "mean": float(valid.mean()),
+                "median": float(valid.median()),
+                "count": int(len(valid)),
+            }
+
+    return stats
+
+
+def evaluate_market_position(
+    car: Dict[str, Any],
+    market_stats: Dict[str, Dict[str, float]],
+    weights: Dict[str, float],
+) -> Dict[str, Any]:
+    """Compare a single car against market statistics.
+
+    Returns:
+        ``{"comparisons": [...], "overall_percentile": float}``
+
+    The *overall_percentile* is the AHP-weighted average of per-criterion
+    percentile scores (0–100, higher = better).
+    """
+    import pandas as pd  # noqa: F811
+
+    ws = normalize_weights(weights)
+    comparisons: List[Dict[str, Any]] = []
+    weighted_score = 0.0
+    total_weight = 0.0
+
+    for c in CRITERIA:
+        key = c["key"]
+        direction = c["direction"]
+        w = ws.get(key, 0.0)
+        stat = market_stats.get(key)
+
+        car_val = parse_mpg(car.get(key)) if key == "mpg" else _to_float(car.get(key))
+
+        if stat is None or car_val is None or stat.get("count", 0) == 0:
+            comparisons.append({
+                "key": key,
+                "label": c["label"].split(":")[0].strip(),
+                "direction": direction,
+                "car_value": car_val,
+                "mean": None,
+                "percentile": None,
+                "position": "unknown",
+            })
+            continue
+
+        mean_val = stat["mean"]
+        lo = stat["min"]
+        hi = stat["max"]
+
+        if abs(hi - lo) < 1e-12:
+            pct = 50.0
+        else:
+            raw_pct = ((car_val - lo) / (hi - lo)) * 100.0
+            raw_pct = max(0.0, min(100.0, raw_pct))
+            pct = (100.0 - raw_pct) if direction == "cost" else raw_pct
+
+        position = "good" if pct >= 70 else ("average" if pct >= 40 else "poor")
+
+        comparisons.append({
+            "key": key,
+            "label": c["label"].split(":")[0].strip(),
+            "direction": direction,
+            "car_value": car_val,
+            "mean": mean_val,
+            "min": lo,
+            "max": hi,
+            "percentile": pct,
+            "position": position,
+        })
+
+        weighted_score += w * (pct / 100.0)
+        total_weight += w
+
+    overall_percentile = (weighted_score / total_weight * 100.0) if total_weight > 0 else 50.0
+
+    return {
+        "comparisons": comparisons,
+        "overall_percentile": overall_percentile,
+    }
+
+
+_CRITERION_LABELS: Dict[str, str] = {
+    "price": "Giá",
+    "mileage": "Số dặm",
+    "year": "Năm SX",
+    "accidents_or_damage": "Tai nạn",
+    "one_owner": "Một chủ",
+    "driver_rating": "Đánh giá lái xe",
+    "seller_rating": "Uy tín người bán",
+    "mpg": "Tiêu thụ NL (MPG)",
+    "price_drop": "Giảm giá",
+}
+
+
+def _determine_label(risk_pct: float, percentile: float) -> Tuple[str, str]:
+    """Determine colour label from AI risk (%) and market percentile (%).
+
+    Rules:
+    - Red:    risk > 60 **OR** percentile < 30
+    - Green:  risk < 30 **AND** percentile > 70
+    - Yellow: otherwise
+    """
+    if risk_pct > 60 or percentile < 30:
+        return ("red", "🔴 KHÔNG NÊN MUA")
+    if risk_pct < 30 and percentile > 70:
+        return ("green", "🟢 NÊN MUA")
+    return ("yellow", "🟡 CẦN CÂN NHẮC")
+
+
+def generate_explanation(
+    car: Dict[str, Any],
+    market_stats: Dict[str, Dict[str, float]],
+    ai_risk: float,
+    ai_maint: float,
+    market_position: Dict[str, Any],
+    ahp_score_val: float,
+) -> Dict[str, Any]:
+    """Generate a detailed explanation with emoji labels and bullet-point rationale.
+
+    Returns a dict with keys:
+        badge, label, ahp_score, ai_risk_pct, ai_maint_monthly, ai_maint_annual,
+        percentile, pros (list[str]), cons (list[str]), summary (str).
+    """
+    percentile = market_position["overall_percentile"]
+    comparisons = market_position.get("comparisons", [])
+    risk_pct = ai_risk * 100.0
+    annual_cost = ai_maint * 12
+
+    badge, label = _determine_label(risk_pct, percentile)
+
+    pros: List[str] = []
+    cons: List[str] = []
+
+    # --- AI Risk ---
+    if risk_pct < 30:
+        pros.append(f"Rủi ro tai nạn thấp ({risk_pct:.0f}%)")
+    elif risk_pct > 60:
+        cons.append(f"Rủi ro tai nạn cao ({risk_pct:.0f}%) — cần kiểm tra lịch sử kỹ")
+    else:
+        cons.append(f"Rủi ro tai nạn trung bình ({risk_pct:.0f}%)")
+
+    # --- Maintenance ---
+    if ai_maint < 150:
+        pros.append(f"Chi phí bảo dưỡng thấp (~${ai_maint:.0f}/tháng, ~${annual_cost:.0f}/năm)")
+    elif ai_maint > 350:
+        cons.append(f"Chi phí bảo dưỡng cao (~${ai_maint:.0f}/tháng, ~${annual_cost:.0f}/năm)")
+    else:
+        pros.append(f"Chi phí bảo dưỡng chấp nhận được (~${ai_maint:.0f}/tháng)")
+
+    # --- Overall market position ---
+    if percentile >= 70:
+        pros.append(f"Vị trí thị trường tốt (top {100 - percentile:.0f}% thị trường)")
+    elif percentile < 30:
+        cons.append(f"Vị trí thị trường thấp (percentile {percentile:.0f}%)")
+    else:
+        pros.append(f"Vị trí thị trường trung bình (percentile {percentile:.0f}%)")
+
+    # --- Per-criterion vs. market mean ---
+    for comp in comparisons:
+        key = comp.get("key", "")
+        car_val = comp.get("car_value")
+        mean = comp.get("mean")
+        position = comp.get("position", "unknown")
+        direction = comp.get("direction", "benefit")
+
+        if car_val is None or mean is None:
+            continue
+        # Boolean-ish criteria already covered by AI risk assessment
+        if key in ("accidents_or_damage", "one_owner"):
+            continue
+
+        lbl = _CRITERION_LABELS.get(key, key)
+        fmt = ",.0f" if key in ("price", "mileage", "year") else ",.1f"
+
+        if position == "good":
+            pros.append(f"{lbl}: {car_val:{fmt}} (tốt hơn TB {mean:{fmt}})")
+        elif position == "poor":
+            cons.append(f"{lbl}: {car_val:{fmt}} (kém hơn TB {mean:{fmt}})")
+
+    # --- Summary sentence ---
+    if badge == "green":
+        summary = "Xe có vị trí tốt trên thị trường với rủi ro thấp. Nên thương lượng và kiểm tra nhanh."
+    elif badge == "yellow":
+        summary = "Xe ở mức trung bình. Cần so sánh thêm và kiểm định tại gara trước khi quyết định."
+    else:
+        summary = "Xe có rủi ro cao hoặc vị trí thị trường kém. Nên tìm lựa chọn khác."
+
+    return {
+        "badge": badge,
+        "label": label,
+        "ahp_score": ahp_score_val,
+        "ai_risk_pct": risk_pct,
+        "ai_maint_monthly": ai_maint,
+        "ai_maint_annual": annual_cost,
+        "percentile": percentile,
+        "pros": pros,
+        "cons": cons,
+        "summary": summary,
+    }
+
+
 def predict(models: LoadedModels, cars: List[Dict[str, Any]]) -> Tuple[List[float], List[float]]:
     # Build feature rows aligned to training metadata.
     # We always create all raw columns expected by the preprocessor, and fill missing
@@ -357,32 +593,66 @@ def _to_float(v: Any) -> Optional[float]:
         return None
 
 
-def choose_option(ahp: float, accident_risk: float, maint_monthly: float) -> Tuple[str, str, str]:
-    """Decision logic with risk-first rule and more realistic AHP thresholds.
+def choose_option(
+    ahp: float,
+    accident_risk: float,
+    maint_monthly: float,
+    percentile: Optional[float] = None,
+) -> Tuple[str, str, str]:
+    """Decision logic combining AI risk, AHP score and optional market percentile.
 
-    Rules:
-    - If accident risk > 60% => red (reject/warn)
-    - Otherwise, use a softer scoring based on AHP + risk + maintenance.
+    When *percentile* is provided (**market / evaluate** mode):
+        - Red:    AI_Risk > 60 % **OR** Percentile < 30 %
+        - Green:  AI_Risk < 30 % **AND** Percentile > 70 %
+        - Yellow: otherwise
+
+    When *percentile* is ``None`` (**group / recommend** mode):
+        - Uses a softer composite score (AHP + risk + maintenance).
     """
 
     accident_risk = float(accident_risk) if math.isfinite(float(accident_risk)) else 1.0
     maint_monthly = float(maint_monthly) if math.isfinite(float(maint_monthly)) else 1e9
     ahp = float(ahp) if math.isfinite(float(ahp)) else 0.0
 
-    accident_pct = accident_risk * 100.0
+    risk_pct = accident_risk * 100.0
+
+    # --- Market mode (evaluate) -----------------------------------------
+    if percentile is not None:
+        badge, label = _determine_label(risk_pct, percentile)
+        if badge == "green":
+            return (
+                "Phương án 1: NÊN MUA (ƯU TIÊN)",
+                "green",
+                f"AI Risk {risk_pct:.0f}% < 30% & Percentile {percentile:.0f}% > 70%. Nên mua.",
+            )
+        if badge == "red":
+            reasons: List[str] = []
+            if risk_pct > 60:
+                reasons.append(f"Rủi ro tai nạn {risk_pct:.0f}% > 60%")
+            if percentile < 30:
+                reasons.append(f"Percentile {percentile:.0f}% < 30%")
+            return (
+                "Phương án 3: KHÔNG NÊN MUA",
+                "red",
+                " & ".join(reasons) + ". Nên tìm lựa chọn khác.",
+            )
+        return (
+            "Phương án 2: CẦN CÂN NHẮC",
+            "yellow",
+            f"AI Risk {risk_pct:.0f}%, Percentile {percentile:.0f}%. Cần xem xét thêm.",
+        )
+
+    # --- Group mode (recommend) ------------------------------------------
     if accident_risk > 0.60:
         return (
             "Phương án 3: RỦI RO TAI NẠN CAO",
             "red",
-            f"Rủi ro tai nạn {accident_pct:.0f}% > 60%. Nên loại hoặc kiểm tra lịch sử tai nạn rất kỹ.",
+            f"Rủi ro tai nạn {risk_pct:.0f}% > 60%. Nên loại hoặc kiểm tra lịch sử tai nạn rất kỹ.",
         )
 
-    # Soft composite score (bounded) to avoid brittle hard thresholds.
-    # AHP in [0,1], risk in [0,1], maint roughly [25..900] USD/month.
     maint_pen = min(1.0, max(0.0, maint_monthly / 500.0))
     composite = (0.62 * ahp) + (0.28 * (1.0 - accident_risk)) + (0.10 * (1.0 - maint_pen))
 
-    # Practical recommendation bands.
     if ahp >= 0.45 and composite >= 0.58:
         return (
             "Phương án 1: NÊN MUA (ƯU TIÊN)",
