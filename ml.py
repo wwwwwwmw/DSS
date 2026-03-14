@@ -211,8 +211,13 @@ def _minmax(values: List[Optional[float]], direction: str) -> List[float]:
     return out
 
 
-def ahp_score(cars: List[Dict[str, Any]], weights: Dict[str, float]) -> List[float]:
-    # Here "AHP" is implemented as normalized weights + min-max scoring per criterion.
+def ahp_score(cars: List[Dict[str, Any]], weights: Dict[str, float]) -> Tuple[List[float], List[Dict[str, float]]]:
+    """Compute AHP scores and per-criterion contribution details.
+
+    Returns:
+        (scores, details) where *details* is a list (one per car) of
+        dicts mapping criterion key -> weighted contribution.
+    """
     ws = normalize_weights(weights)
 
     per_key_scaled: Dict[str, List[float]] = {}
@@ -232,13 +237,18 @@ def ahp_score(cars: List[Dict[str, Any]], weights: Dict[str, float]) -> List[flo
         per_key_scaled[key] = _minmax(values, direction)
 
     scores: List[float] = []
+    details: List[Dict[str, float]] = []
     for i in range(len(cars)):
         s = 0.0
+        d: Dict[str, float] = {}
         for c in CRITERIA:
             key = c["key"]
-            s += ws.get(key, 0.0) * per_key_scaled[key][i]
+            contrib = ws.get(key, 0.0) * per_key_scaled[key][i]
+            d[key] = float(contrib)
+            s += contrib
         scores.append(float(s))
-    return scores
+        details.append(d)
+    return scores, details
 
 
 def parse_mpg_series(s):

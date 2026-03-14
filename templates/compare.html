@@ -33,29 +33,29 @@
                         <button class="btn danger btn-remove-car" type="button">Xóa</button>
                     </div>
                     <div class="grid">
-                        <div class="col-4"><label>Giá bán ($) *</label><input name="car{{i}}_price" type="number"
-                                step="1" placeholder="15000" /></div>
-                        <div class="col-4"><label>Số dặm *</label><input name="car{{i}}_mileage" type="number" step="1"
-                                placeholder="60000" /></div>
-                        <div class="col-4"><label>Năm sản xuất *</label><input name="car{{i}}_year" type="number"
-                                step="1" placeholder="2018" /></div>
-                        <div class="col-4"><label>Tai nạn/Hỏng hóc *</label>
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car{{i}}_price"
+                                placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>Số dặm*</label><input name="car{{i}}_mileage"
+                                placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car{{i}}_year"
+                                placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
                             <select name="car{{i}}_accidents_or_damage">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Không</option>
                                 <option value="1">1 - Có</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Một chủ duy nhất *</label>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
                             <select name="car{{i}}_one_owner">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Nhiều chủ</option>
                                 <option value="1" selected>1 - Một chủ</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>MPG (Tiêu thụ NL)</label><input name="car{{i}}_mpg" type="text"
-                                placeholder="30 hoặc 39-38" /></div>
-                        <div class="col-4"><label>Đánh giá lái xe (0-5)</label>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car{{i}}_mpg"
+                                placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
                             <select name="car{{i}}_driver_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -66,7 +66,7 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Đánh giá người bán (0-5)</label>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
                             <select name="car{{i}}_seller_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -77,10 +77,9 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop" type="number"
-                                step="1" placeholder="500" /></div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop"
+                                placeholder="vd: 500" /></div>
                     </div>
-                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
                 </div>
                 {% endfor %}
             </div>
@@ -92,29 +91,29 @@
                         <button class="btn danger btn-remove-car" type="button">Xóa</button>
                     </div>
                     <div class="grid">
-                        <div class="col-4"><label>Giá bán ($) *</label><input name="car__INDEX___price" type="number"
-                                step="1" placeholder="15000" /></div>
-                        <div class="col-4"><label>Số dặm *</label><input name="car__INDEX___mileage" type="number"
-                                step="1" placeholder="60000" /></div>
-                        <div class="col-4"><label>Năm sản xuất *</label><input name="car__INDEX___year" type="number"
-                                step="1" placeholder="2018" /></div>
-                        <div class="col-4"><label>Tai nạn/Hỏng hóc *</label>
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car__INDEX___price"
+                                placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>Số dặm*</label><input name="car__INDEX___mileage"
+                                placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car__INDEX___year"
+                                placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
                             <select name="car__INDEX___accidents_or_damage">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Không</option>
                                 <option value="1">1 - Có</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Một chủ duy nhất *</label>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
                             <select name="car__INDEX___one_owner">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Nhiều chủ</option>
                                 <option value="1" selected>1 - Một chủ</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>MPG (Tiêu thụ NL)</label><input name="car__INDEX___mpg" type="text"
-                                placeholder="30 hoặc 39-38" /></div>
-                        <div class="col-4"><label>Đánh giá lái xe (0-5)</label>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car__INDEX___mpg"
+                                placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
                             <select name="car__INDEX___driver_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -125,7 +124,7 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Đánh giá người bán (0-5)</label>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
                             <select name="car__INDEX___seller_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -136,10 +135,9 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Giảm giá ($)</label><input name="car__INDEX___price_drop"
-                                type="number" step="1" placeholder="500" /></div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car__INDEX___price_drop"
+                                placeholder="vd: 500" /></div>
                     </div>
-                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
                 </div>
             </template>
         </div>

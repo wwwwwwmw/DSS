@@ -1,25 +1,114 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="card">
-    <h2>Tư vấn mua xe (AHP + ML)</h2>
+    <h2>Tư vấn mua xe</h2>
     <div class="small">Nhập tối thiểu 2 xe để hệ thống xếp hạng và gợi ý phương án.</div>
 </div>
 
 <div class="card">
     <form method="post" action="{{ url_for('recommend') }}">
-        <h3>1) Trọng số tiêu chí (số &ge; 0)</h3>
-        <div class="grid">
-            {% for c in criteria %}
-            <div class="col-3">
-                <label>{{ c.label }}</label>
-                <input type="number" min="0" step="0.01" name="w_{{ c.key }}" value="{{ c.default }}" required />
+        <h3>1) Ma trận so sánh cặp AHP</h3>
+        <div class="small">Bạn có thể chỉnh trực tiếp ma trận {{ criteria|length }}×{{ criteria|length }}.
+            Lưu ý: hệ thống sẽ tự động ép các ô đường chéo chính bằng 1 trước khi tính toán.</div>
+
+        {# Hidden weight inputs for form submission #}
+        {% for c in criteria %}
+        <input type="hidden" name="w_{{ c.key }}" id="hw_{{ c.key }}"
+            value="{{ '%.8f'|format(weights[c.key] if weights else c.default) }}" />
+        {% endfor %}
+        <input type="hidden" name="pairwise_matrix_json" id="pairwise_matrix_json" />
+
+        <div id="pairwise-section" style="margin:18px 0 10px;">
+            {# --- Hints panel (above matrix) --- #}
+            <div class="card hints-box" style="margin:0 0 14px; padding:14px;">
+                <div style="display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:240px;">
+                        <h4 style="margin:0 0 8px; color:var(--text); font-size:1.1rem;">Hướng dẫn thang điểm AHP
+                            (Saaty)</h4>
+                        <table class="ahp-scale-table">
+                            <thead>
+                                <tr>
+                                    <th>Điểm</th>
+                                    <th>Ý nghĩa</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1</td>
+                                    <td>Hai tiêu chí quan trọng <b>như nhau</b></td>
+                                </tr>
+                                <tr>
+                                    <td>3</td>
+                                    <td>Tiêu chí này quan trọng hơn <b>mức vừa</b></td>
+                                </tr>
+                                <tr>
+                                    <td>5</td>
+                                    <td>Tiêu chí này quan trọng hơn <b>nhiều</b></td>
+                                </tr>
+                                <tr>
+                                    <td>7</td>
+                                    <td>Tiêu chí này quan trọng hơn <b>rất nhiều</b></td>
+                                </tr>
+                                <tr>
+                                    <td>9</td>
+                                    <td>Tiêu chí này quan trọng hơn <b>tuyệt đối</b></td>
+                                </tr>
+                                <tr>
+                                    <td>2,4,6,8</td>
+                                    <td>Mức trung gian giữa các cấp trên</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="small" style="margin-top:8px;">
+                            <b>Ví dụ:</b> Nếu "Giá" quan trọng gấp 3 lần "Số dặm", đặt ô [Giá, Số dặm] = <b>3</b>.
+                            Ô ngược lại [Số dặm, Giá] sẽ tự động = <b>1/3</b>.
+                        </div>
+                    </div>
+                    <div style="min-width:200px;">
+                        <h4 style="margin:0 0 8px; color:var(--text); font-size:1.1rem;">Trạng thái</h4>
+                        <div id="cr-display" style="font-weight:600; margin-bottom:8px; font-size:1.1rem;">CR: —</div>
+                        <div class="small" style="margin:6px 0;">CR &lt; 0.1: ma trận nhất quán ✅</div>
+                        <div class="small" style="margin:6px 0;">CR ≥ 0.1: cần điều chỉnh lại ❌</div>
+                        <div class="small" style="margin:6px 0; opacity:.7;">Đường chéo chính luôn = 1</div>
+                        <button class="btn secondary" type="button" id="btn-reset-matrix"
+                            style="margin-top:10px; width:100%;">Reset về mặc định</button>
+                    </div>
+                </div>
             </div>
-            {% endfor %}
+            {# --- Matrix table --- #}
+            <div style="overflow-x:auto;">
+                <table id="pairwise-matrix"></table>
+            </div>
+
+            <div id="matrix-validation-msg" class="flash danger" style="display:none; margin-top:10px;"></div>
+
+            <div class="actions" style="margin-top:12px; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                <button class="btn secondary" type="button" id="btn-calc-criteria-weights">Tính trọng số tiêu
+                    chí</button>
+                <div class="small" style="max-width:680px;">
+                    Bấm nút để xem bảng xếp hạng tiêu chí theo trọng số từ ma trận AHP. Sau đó bạn có thể chọn tiếp tục
+                    nhập thông tin xe để chạy xếp hạng hoặc dừng tại đây.
+                </div>
+            </div>
+
+            <div id="criteria-ranking-wrap" class="card" style="display:none; margin-top:12px;">
+                <h4 style="margin:0 0 10px;">Bảng xếp hạng tiêu chí theo trọng số</h4>
+                <table class="table" id="criteria-ranking-table">
+                    <thead>
+                        <tr>
+                            <th>Hạng</th>
+                            <th>Tiêu chí</th>
+                            <th>Trọng số</th>
+                            <th>Tỷ lệ (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="criteria-ranking-body"></tbody>
+                </table>
+            </div>
         </div>
 
         <h3>2) Thông tin xe (tối thiểu 2)</h3>
-        <div class="small">Mẹo: MPG có thể để trống. Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.
-        </div>
+        <div class="small">Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.</div>
 
         <div class="flash danger client-errors" style="display:none"></div>
 
@@ -40,6 +129,64 @@
             </div>
 
             <div class="car-list">
+                {% if cars %}
+                {% for i in range(0, cars|length) %}
+                <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe #{{ i+1 }}</b>
+                        <button class="btn danger btn-remove-car" type="button">Xóa</button>
+                    </div>
+                    <div class="grid">
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car{{i}}_price"
+                                value="{{ cars[i].price }}" placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>Số dặm*</label><input name="car{{i}}_mileage"
+                                value="{{ cars[i].mileage }}" placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car{{i}}_year"
+                                value="{{ cars[i].year }}" placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
+                            <select name="car{{i}}_accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0" {% if cars[i].accidents_or_damage=='0' %}selected{% endif %}>0 - Không
+                                </option>
+                                <option value="1" {% if cars[i].accidents_or_damage=='1' %}selected{% endif %}>1 - Có
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
+                            <select name="car{{i}}_one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0" {% if cars[i].one_owner=='0' %}selected{% endif %}>0 - Nhiều chủ
+                                </option>
+                                <option value="1" {% if cars[i].one_owner=='1' %}selected{% endif %}>1 - Một chủ
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car{{i}}_mpg"
+                                value="{{ cars[i].mpg }}" placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car{{i}}_driver_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{r}}" {% if cars[i].driver_rating==r|string %}selected{% endif %}>{{r}}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car{{i}}_seller_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{r}}" {% if cars[i].seller_rating==r|string %}selected{% endif %}>{{r}}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop"
+                                value="{{ cars[i].price_drop }}" placeholder="vd: 500" /></div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
                 {% for i in range(0, 2) %}
                 <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
                     <div class="actions">
@@ -47,31 +194,29 @@
                         <button class="btn danger btn-remove-car" type="button">Xóa</button>
                     </div>
                     <div class="grid">
-                        <div class="col-4"><label>Giá bán ($) *</label><input name="car{{i}}_price" type="number"
-                                step="1" placeholder="15000" /></div>
-                        <div class="col-4"><label>Số dặm *</label><input name="car{{i}}_mileage" type="number" step="1"
-                                placeholder="60000" /></div>
-                        <div class="col-4"><label>Năm sản xuất *</label><input name="car{{i}}_year" type="number"
-                                step="1" placeholder="2018" /></div>
-
-                        <div class="col-4"><label>Tai nạn/Hỏng hóc *</label>
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car{{i}}_price"
+                                placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>Số dặm*</label><input name="car{{i}}_mileage"
+                                placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car{{i}}_year"
+                                placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
                             <select name="car{{i}}_accidents_or_damage">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Không</option>
                                 <option value="1">1 - Có</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Một chủ duy nhất *</label>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
                             <select name="car{{i}}_one_owner">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Nhiều chủ</option>
                                 <option value="1" selected>1 - Một chủ</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>MPG (Tiêu thụ nhiên liệu)</label><input name="car{{i}}_mpg"
-                                type="text" placeholder="30 hoặc 39-38" /></div>
-
-                        <div class="col-4"><label>Đánh giá lái xe (0-5)</label>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car{{i}}_mpg"
+                                placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
                             <select name="car{{i}}_driver_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -82,7 +227,7 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Đánh giá người bán (0-5)</label>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
                             <select name="car{{i}}_seller_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -93,12 +238,12 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop" type="number"
-                                step="1" placeholder="500" /></div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop"
+                                placeholder="vd: 500" /></div>
                     </div>
-                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
                 </div>
                 {% endfor %}
+                {% endif %}
             </div>
 
             <template>
@@ -108,31 +253,29 @@
                         <button class="btn danger btn-remove-car" type="button">Xóa</button>
                     </div>
                     <div class="grid">
-                        <div class="col-4"><label>Giá bán ($) *</label><input name="car__INDEX___price" type="number"
-                                step="1" placeholder="15000" /></div>
-                        <div class="col-4"><label>Số dặm *</label><input name="car__INDEX___mileage" type="number"
-                                step="1" placeholder="60000" /></div>
-                        <div class="col-4"><label>Năm sản xuất *</label><input name="car__INDEX___year" type="number"
-                                step="1" placeholder="2018" /></div>
-
-                        <div class="col-4"><label>Tai nạn/Hỏng hóc *</label>
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car__INDEX___price"
+                                placeholder="vd: 24000" /></div>
+                        <div class="col-3"><label>Số dặm*</label><input name="car__INDEX___mileage"
+                                placeholder="vd: 52000" /></div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car__INDEX___year"
+                                placeholder="vd: 2019" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
                             <select name="car__INDEX___accidents_or_damage">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Không</option>
                                 <option value="1">1 - Có</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Một chủ duy nhất *</label>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
                             <select name="car__INDEX___one_owner">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Nhiều chủ</option>
                                 <option value="1" selected>1 - Một chủ</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>MPG (Tiêu thụ nhiên liệu)</label><input name="car__INDEX___mpg"
-                                type="text" placeholder="30 hoặc 39-38" /></div>
-
-                        <div class="col-4"><label>Đánh giá lái xe (0-5)</label>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car__INDEX___mpg"
+                                placeholder="vd: 30 hoặc 39-38" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
                             <select name="car__INDEX___driver_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -143,7 +286,7 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Đánh giá người bán (0-5)</label>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
                             <select name="car__INDEX___seller_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
@@ -154,95 +297,799 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-4"><label>Giảm giá ($)</label><input name="car__INDEX___price_drop"
-                                type="number" step="1" placeholder="500" /></div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car__INDEX___price_drop"
+                                placeholder="vd: 500" /></div>
                     </div>
-                    <div class="hint">* Bắt buộc nếu xe có nhập dữ liệu.</div>
                 </div>
             </template>
         </div>
 
-        <button class="btn" type="submit">Tính điểm & Gợi ý</button>
+        <button class="btn" type="submit" id="btn-submit-ranking"
+            style="background:var(--green);border-color:var(--green);font-size:1rem;">🔄 Chạy xếp
+            hạng</button>
+        <span id="cr-block-msg" style="display:none; color:var(--red); margin-left:12px; font-weight:600;">⚠ Ma trận
+            chưa nhất quán (CR ≥ 0.1). Hãy điều chỉnh lại trước khi chạy.</span>
     </form>
 </div>
 
-{% if results %}
-<div class="card">
-    <h3>Kết quả</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Phương án</th>
-                <th>AHP score</th>
-                <th>Rủi ro tai nạn (ML)</th>
-                <th>Chi phí bảo dưỡng (ML)</th>
-                <th>Gợi ý</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in results %}
-            <tr>
-                <td>{{ r.idx }}</td>
-                <td>
-                    <span class="badge {{ r.badge }}">{{ r.option }}</span>
-                </td>
-                <td>{{ '%.3f'|format(r.ahp_score) }}</td>
-                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
-                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
-                <td>{{ r.message }}</td>
-                <td>
-                    {% if current_user.is_authenticated and cars %}
-                    <form method="post" action="{{ url_for('save_my_cars') }}">
-                        <input type="hidden" name="source" value="manual" />
-                        <input type="hidden" name="title" value="Xe #{{ r.idx }}" />
-                        <textarea name="car_json" style="display:none">{{ cars[r.idx-1]|tojson }}</textarea>
-                        <button class="btn secondary" type="submit">Lưu</button>
-                    </form>
-                    {% else %}
-                    <a class="btn secondary" href="{{ url_for('login') }}">Đăng nhập</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{% if results or chart_data %}
+{# ---- Tab Navigation ---- #}
+<div class="card" style="padding:0; overflow:hidden;">
+    <div class="result-tabs">
+        <button class="result-tab active" data-tab="tab-ranking">Bảng xếp hạng</button>
+        <button class="result-tab" data-tab="tab-charts">Biểu đồ AHP</button>
+    </div>
+</div>
+
+{# ---- Tab: Bảng xếp hạng ---- #}
+<div class="tab-pane active" id="tab-ranking">
+    {% if results %}
+    <div class="card">
+        <h3>Kết quả tư vấn</h3>
+
+        {% for r in results %}
+
+        {% set border_color = '#dc3545' %}
+        {% if r.badge == 'green' %}
+        {% set border_color = '#28a745' %}
+        {% elif r.badge == 'yellow' %}
+        {% set border_color = '#ffc107' %}
+        {% endif %}
+
+        {% set card_attr = 'style="margin:12px 0; border-left:5px solid ' ~ border_color ~ '; padding:16px;"' %}
+
+        <div class="card" {{ card_attr|safe }}>
+            <h4 style="margin:0 0 6px 0;">Xe #{{ r.idx }}</h4>
+
+            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+                <span class="badge {{ r.badge }}">{{ r.option }}</span>
+                <span class="small" style="opacity:.85;">
+                    AHP: {{ '%.3f'|format(r.ahp_score) }}
+                </span>
+            </div>
+
+            <div class="small">{{ r.message }}</div>
+
+            {# --- Detail badges --- #}
+            <div style="margin-top:8px; display:flex; gap:10px; flex-wrap:wrap;">
+                <span class="badge {{ r.risk_level_badge }}">Rủi ro: {{ r.risk_level_label }}</span>
+                <span class="badge {{ r.maintenance_level_badge }}">Bảo dưỡng: {{ r.maintenance_level_label }}</span>
+            </div>
+
+            {% if current_user.is_authenticated and cars %}
+            <div style="margin-top:8px;">
+                <form method="post" action="{{ url_for('save_my_cars') }}" style="display:inline;">
+                    <input type="hidden" name="source" value="manual" />
+                    <input type="hidden" name="title" value="Xe #{{ r.idx }}" />
+                    <textarea name="car_json" style="display:none">{{ cars[r.idx-1]|tojson }}</textarea>
+                    <button class="btn secondary" type="submit">Lưu xe</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     {% if top_recommendations %}
-    <h4>Top đề xuất</h4>
-    <div class="small">Chỉ hiển thị phương án xanh.</div>
-    <ul>
-        {% for r in top_recommendations %}
-        <li>Xe #{{ r.idx }} — {{ r.message }}</li>
-        {% endfor %}
-    </ul>
+    <div class="card">
+        <h4>Top đề xuất</h4>
+        <div class="small">Chỉ hiển thị phương án xanh.</div>
+        <ul>
+            {% for r in top_recommendations %}
+            <li>Xe #{{ r.idx }} — {{ r.message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
     {% endif %}
 
     {% if high_risk_results %}
-    <h4 style="margin-top:16px;">Xe rủi ro cao (lọc ra trước khi xếp hạng)</h4>
-    <div class="small">Các xe có rủi ro tai nạn &gt; 60% sẽ không được đưa vào AHP ranking.</div>
-    <table class="table" style="margin-top:10px;">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Rủi ro tai nạn (ML)</th>
-                <th>Chi phí bảo dưỡng (ML)</th>
-                <th>Gợi ý</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in high_risk_results %}
-            <tr>
-                <td>{{ r.idx }}</td>
-                <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
-                <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
-                <td>{{ r.message }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="card">
+        <h4>Xe rủi ro cao (lọc ra trước khi xếp hạng)</h4>
+        <div class="small">Các xe có rủi ro tai nạn &gt; 60% sẽ không được đưa vào AHP ranking.</div>
+        <table class="table" style="margin-top:10px;">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Rủi ro tai nạn (ML)</th>
+                    <th>Chi phí bảo dưỡng (ML)</th>
+                    <th>Gợi ý</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in high_risk_results %}
+                <tr>
+                    <td>{{ r.idx }}</td>
+                    <td><span class="badge {{ r.risk_level_badge }}">{{ r.risk_level_label }}</span></td>
+                    <td><span class="badge {{ r.maintenance_level_badge }}">{{ r.maintenance_level_label }}</span></td>
+                    <td>{{ r.message }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% endif %}
-</div>
+</div>{# /tab-ranking #}
+
+{# ---- Tab: Biểu đồ AHP ---- #}
+<div class="tab-pane" id="tab-charts" style="display:none;">
+    {% if chart_data %}
+    <div class="card">
+        <h3>Xếp hạng tổng điểm AHP</h3>
+        <div class="small" style="margin-bottom:10px;">Thanh ngang thể hiện điểm AHP tổng của từng xe. Xe điểm cao nhất
+            được đánh dấu nổi bật.</div>
+        <canvas id="ahpRankChart" height="80"></canvas>
+    </div>
+    <div class="card">
+        <h3>Trọng số tiêu chí (từ ma trận AHP)</h3>
+        <div class="small" style="margin-bottom:10px;">Tỷ lệ phần trăm đóng góp của mỗi tiêu chí vào điểm AHP.</div>
+        <canvas id="weightBarChart" height="80"></canvas>
+    </div>
+    <div class="card">
+        <h3>Đóng góp từng tiêu chí vào điểm AHP</h3>
+        <div class="small" style="margin-bottom:10px;">Biểu đồ cột chồng cho thấy tiêu chí nào đóng góp nhiều nhất vào
+            điểm của từng xe.</div>
+        <canvas id="stackedBarChart" height="100"></canvas>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="small">Chưa có dữ liệu biểu đồ. Hãy nhập xe và chạy xếp hạng.</div>
+    </div>
+    {% endif %}
+</div>{# /tab-charts #}
 {% endif %}
+
+{# ===== Chart.js ===== #}
+{% if chart_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+    (function () {
+        /* Dark theme defaults */
+        Chart.defaults.color = '#9fb0cc';
+        Chart.defaults.borderColor = '#22304a';
+
+        const DATA = {{ chart_data | tojson
+    }};
+    const keys = DATA.criteria_keys;
+    const labels = DATA.criteria_labels;
+    const directions = DATA.criteria_directions;
+    const weights = DATA.weights;
+    const cars = DATA.cars;
+    const details = DATA.ahp_details;
+    const scores = DATA.scores;
+
+    // Dark-theme palette
+    const COLORS = [
+        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+        '#ec4899', '#06b6d4', '#f97316', '#6366f1'
+    ];
+
+    /* ---- 1) AHP Ranking Horizontal Bar ---- */
+    (function ahpRankChart() {
+        const ctx = document.getElementById('ahpRankChart');
+        if (!ctx || !scores || scores.length === 0) return;
+
+        const carLabels = cars.map((_, i) => 'Xe #' + (i + 1));
+        const maxScore = Math.max(...scores);
+        const barColors = scores.map(s => s >= maxScore - 1e-9 ? '#10b981' : '#3b82f6');
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: carLabels,
+                datasets: [{
+                    label: 'Điểm AHP',
+                    data: scores.map(s => +s.toFixed(4)),
+                    backgroundColor: barColors,
+                    borderColor: barColors,
+                    borderWidth: 1,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                scales: {
+                    x: { beginAtZero: true, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc' }, title: { display: true, text: 'Điểm AHP', color: '#9fb0cc' } },
+                    y: { grid: { display: false }, ticks: { color: '#e9f0ff', font: { weight: '600' } } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: { label: function (ctx) { return 'Điểm AHP: ' + ctx.parsed.x.toFixed(4); } }
+                    }
+                }
+            }
+        });
+    })();
+
+    /* ---- 2) Weight Horizontal Bar ---- */
+    (function weightBarChart() {
+        const ctx = document.getElementById('weightBarChart');
+        if (!ctx) return;
+
+        const pcts = keys.map(k => +(weights[k] * 100).toFixed(1));
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Trọng số (%)',
+                    data: pcts,
+                    backgroundColor: COLORS.slice(0, keys.length),
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                scales: {
+                    x: { beginAtZero: true, max: 100, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc', callback: v => v + '%' }, title: { display: true, text: 'Tỷ lệ %', color: '#9fb0cc' } },
+                    y: { grid: { display: false }, ticks: { color: '#e9f0ff', font: { size: 11 } } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: { label: function (ctx) { return ctx.label + ': ' + ctx.parsed.x.toFixed(1) + '%'; } }
+                    }
+                }
+            }
+        });
+    })();
+
+    /* ---- 3) Stacked Bar Chart: per-criterion AHP contributions ---- */
+    (function stackedBar() {
+        const ctx = document.getElementById('stackedBarChart');
+        if (!ctx || !details || details.length === 0) return;
+
+        const carLabels = cars.map((_, i) => 'Xe #' + (i + 1));
+
+        const datasets = keys.map((k, j) => ({
+            label: labels[j],
+            data: details.map(d => +(d[k] || 0).toFixed(4)),
+            backgroundColor: COLORS[j % COLORS.length],
+        }));
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: { labels: carLabels, datasets: datasets },
+            options: {
+                scales: {
+                    x: { stacked: true, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc' } },
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Điểm AHP', color: '#9fb0cc' }, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc' } }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function (ctx) {
+                                return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4);
+                            }
+                        }
+                    },
+                    legend: { labels: { color: '#e9f0ff' } }
+                }
+            }
+        });
+    })();
+
+    }) ();
+</script>
+{% endif %}
+
+{# ===== Styles ===== #}
+<style>
+    .ahp-scale-table {
+        border-collapse: collapse;
+        font-size: 1rem;
+        width: 100%;
+    }
+
+    .ahp-scale-table th,
+    .ahp-scale-table td {
+        border: 1px solid var(--border);
+        padding: 6px 12px;
+        text-align: left;
+    }
+
+    .ahp-scale-table th {
+        background: rgba(18, 26, 43, .95);
+        color: var(--muted);
+        font-weight: 600;
+    }
+
+    .ahp-scale-table td:first-child {
+        text-align: center;
+        font-weight: 600;
+        color: var(--blue);
+        width: 80px;
+    }
+
+    #pairwise-matrix {
+        border-collapse: collapse;
+        font-size: 1rem;
+        min-width: 100%;
+    }
+
+    #pairwise-matrix th,
+    #pairwise-matrix td {
+        border: 1px solid var(--border);
+        padding: 7px 12px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    #pairwise-matrix th {
+        background: rgba(18, 26, 43, .95);
+        font-weight: 600;
+        color: var(--muted);
+    }
+
+    #pairwise-matrix td.diag {
+        background: rgba(22, 163, 74, .15);
+        font-weight: 600;
+        color: var(--green);
+    }
+
+    #pairwise-matrix td.frac {
+        color: var(--muted);
+    }
+
+    #pairwise-matrix input {
+        width: 90px;
+        padding: 5px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #0b1220;
+        color: var(--text);
+        text-align: center;
+        font-size: 1rem;
+    }
+
+    #pairwise-matrix input:focus {
+        outline: none;
+        border-color: var(--blue);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, .25);
+    }
+
+    #pairwise-matrix input.invalid {
+        border-color: var(--red);
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, .25);
+    }
+
+    #matrix-validation-msg {
+        font-weight: 600;
+    }
+
+    #criteria-ranking-table td:nth-child(1),
+    #criteria-ranking-table td:nth-child(3),
+    #criteria-ranking-table td:nth-child(4) {
+        text-align: center;
+    }
+
+    #criteria-ranking-body tr:first-child td {
+        color: var(--green);
+        font-weight: 600;
+    }
+
+    #btn-submit-ranking:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        filter: grayscale(.5);
+    }
+
+    /* Result Tabs */
+    .result-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+    }
+
+    .result-tab {
+        padding: 12px 18px;
+        background: transparent;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 1rem;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+        transition: color .2s, border-color .2s;
+    }
+
+    .result-tab:hover {
+        color: var(--text);
+    }
+
+    .result-tab.active {
+        color: var(--blue);
+        border-bottom-color: var(--blue);
+        font-weight: 600;
+    }
+</style>
+
+{# ===== Tab Switching JS ===== #}
+<script>
+    (function () {
+        document.querySelectorAll('.result-tabs').forEach(function (tabBar) {
+            tabBar.querySelectorAll('.result-tab').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var tabId = this.getAttribute('data-tab');
+                    if (!tabId) return;
+                    tabBar.querySelectorAll('.result-tab').forEach(function (b) { b.classList.remove('active'); });
+                    document.querySelectorAll('.tab-pane').forEach(function (p) { p.style.display = 'none'; p.classList.remove('active'); });
+                    this.classList.add('active');
+                    var pane = document.getElementById(tabId);
+                    if (pane) { pane.style.display = ''; pane.classList.add('active'); }
+                });
+            });
+        });
+    })();
+</script>
+
+{# ===== Pairwise Matrix JS (editable) ===== #}
+<script>
+    (function () {
+        const CRITERIA = {{ criteria | tojson
+    }};
+    const SERVER_MATRIX = {{ (pairwise_matrix if pairwise_matrix is not none else none) | tojson }};
+    const AUTO_SHOW_RANKING = {{ ((results is not none and results | length > 0) or(high_risk_results is not none and high_risk_results | length > 0)) | tojson }};
+
+    const keys = CRITERIA.map(c => c.key);
+    const labels = CRITERIA.map(c => (c.label.split(':')[0] || c.key).trim());
+    const n = keys.length;
+
+    const RI = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49];
+    const MIN_VAL = 1 / 9;
+    const MAX_VAL = 9;
+    const STORAGE_KEY = 'dss.recommend.pairwiseMatrix.v1';
+
+    let matrix = [];
+
+    keys.forEach(k => {
+        const el = document.getElementById('hw_' + k);
+        if (el) el.setAttribute('data-default', el.value);
+    });
+
+    function parseNumeric(raw) {
+        if (raw === null || raw === undefined) return NaN;
+        const s = String(raw).trim().replace(',', '.');
+        if (!s) return NaN;
+        return Number(s);
+    }
+
+    function fmtVal(v) {
+        if (!Number.isFinite(v)) return '1.000000';
+        if (Math.abs(v - 1) < 1e-9) return '1.000000';
+        return Number(v).toFixed(6);
+    }
+
+    function hasValidShape(m) {
+        if (!Array.isArray(m) || m.length !== n) return false;
+        for (let i = 0; i < n; i++) {
+            if (!Array.isArray(m[i]) || m[i].length !== n) return false;
+        }
+        return true;
+    }
+
+    function matrixFromWeights() {
+        const ws = keys.map(k => {
+            const el = document.getElementById('hw_' + k);
+            const v = el ? parseNumeric(el.value) : NaN;
+            return Number.isFinite(v) && v > 0 ? v : 1;
+        });
+
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            out[i] = [];
+            for (let j = 0; j < n; j++) {
+                out[i][j] = ws[i] / ws[j];
+            }
+        }
+        return out;
+    }
+
+    function normalizeMatrix(rawMatrix) {
+        if (!hasValidShape(rawMatrix)) return matrixFromWeights();
+
+        const out = Array.from({ length: n }, () => Array(n).fill(1));
+        for (let i = 0; i < n; i++) {
+            out[i][i] = 1;
+        }
+
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                let v = parseNumeric(rawMatrix[i][j]);
+                if (!Number.isFinite(v) || v <= 0) v = 1;
+                if (v < MIN_VAL) v = MIN_VAL;
+                if (v > MAX_VAL) v = MAX_VAL;
+                out[i][j] = v;
+                out[j][i] = 1 / v;
+            }
+        }
+        return out;
+    }
+
+    function loadMatrix() {
+        if (hasValidShape(SERVER_MATRIX)) {
+            return normalizeMatrix(SERVER_MATRIX);
+        }
+
+        try {
+            const stored = window.sessionStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (hasValidShape(parsed)) {
+                    return normalizeMatrix(parsed);
+                }
+            }
+        } catch (_e) {
+            // Ignore storage read issues.
+        }
+
+        return matrixFromWeights();
+    }
+
+    function persistMatrix() {
+        const hidden = document.getElementById('pairwise_matrix_json');
+        const payload = JSON.stringify(matrix);
+        if (hidden) hidden.value = payload;
+        try {
+            window.sessionStorage.setItem(STORAGE_KEY, payload);
+        } catch (_e) {
+            // Ignore storage write issues.
+        }
+    }
+
+    function showMatrixValidation(message) {
+        const box = document.getElementById('matrix-validation-msg');
+        if (!box) return;
+        box.textContent = message;
+        box.style.display = 'block';
+    }
+
+    function hideMatrixValidation() {
+        const box = document.getElementById('matrix-validation-msg');
+        if (!box) return;
+        box.textContent = '';
+        box.style.display = 'none';
+    }
+
+    function hasInvalidInputs() {
+        return document.querySelectorAll('#pairwise-matrix input.invalid').length > 0;
+    }
+
+    function refreshValidationMessage(messageWhenInvalid) {
+        if (hasInvalidInputs()) {
+            showMatrixValidation(
+                messageWhenInvalid ||
+                'Ma trận có ô nhập chưa hợp lệ. Vui lòng nhập số trong khoảng 1/9 đến 9.'
+            );
+            return;
+        }
+        hideMatrixValidation();
+    }
+
+    function buildMatrix() {
+        const tbl = document.getElementById('pairwise-matrix');
+        if (!tbl) return;
+
+        let html = '<thead><tr><th></th>';
+        for (let j = 0; j < n; j++) html += '<th>' + labels[j] + '</th>';
+        html += '</tr></thead><tbody>';
+
+        for (let i = 0; i < n; i++) {
+            html += '<tr><th>' + labels[i] + '</th>';
+            for (let j = 0; j < n; j++) {
+                if (i === j) {
+                    html += '<td class="diag">1.000000</td>';
+                } else if (j > i) {
+                    html += '<td><input type="number" step="any" min="0.111111" max="9" data-row="' + i + '" data-col="' + j + '" value="' + fmtVal(matrix[i][j]) + '" /></td>';
+                } else {
+                    html += '<td class="frac" id="cell_' + i + '_' + j + '">' + fmtVal(matrix[i][j]) + '</td>';
+                }
+            }
+            html += '</tr>';
+        }
+        html += '</tbody>';
+        tbl.innerHTML = html;
+
+        tbl.querySelectorAll('input[data-row]').forEach(inp => {
+            inp.addEventListener('input', onCellChange);
+            inp.addEventListener('change', onCellChange);
+        });
+
+        computeAndUpdate({ showRanking: AUTO_SHOW_RANKING });
+    }
+
+    function onCellChange(e) {
+        const inp = e.target;
+        const i = parseInt(inp.getAttribute('data-row'), 10);
+        const j = parseInt(inp.getAttribute('data-col'), 10);
+
+        const val = parseNumeric(inp.value);
+        const ok = Number.isFinite(val) && val >= MIN_VAL && val <= MAX_VAL;
+
+        if (!ok) {
+            inp.classList.add('invalid');
+            refreshValidationMessage(
+                'Ô [' + labels[i] + ' so với ' + labels[j] + '] chỉ nhận số trong khoảng 1/9 đến 9.'
+            );
+            computeAndUpdate();
+            return;
+        }
+
+        inp.classList.remove('invalid');
+        matrix[i][j] = val;
+        matrix[j][i] = 1 / val;
+
+        const recip = document.getElementById('cell_' + j + '_' + i);
+        if (recip) recip.textContent = fmtVal(matrix[j][i]);
+
+        refreshValidationMessage();
+        computeAndUpdate();
+    }
+
+    function computeWeights() {
+        const gm = [];
+        for (let i = 0; i < n; i++) {
+            let prod = 1;
+            for (let j = 0; j < n; j++) prod *= matrix[i][j];
+            gm[i] = Math.pow(prod, 1 / n);
+        }
+        const sum = gm.reduce((a, b) => a + b, 0);
+        return gm.map(v => v / sum);
+    }
+
+    function computeCR(w) {
+        const Aw = [];
+        for (let i = 0; i < n; i++) {
+            let s = 0;
+            for (let j = 0; j < n; j++) s += matrix[i][j] * w[j];
+            Aw[i] = s;
+        }
+
+        let lambdaMax = 0;
+        for (let i = 0; i < n; i++) {
+            if (w[i] > 1e-12) lambdaMax += Aw[i] / w[i];
+        }
+        lambdaMax /= n;
+
+        const CI = (lambdaMax - n) / (n - 1);
+        const ri = n < RI.length ? RI[n] : 1.49;
+        return ri > 0 ? CI / ri : 0;
+    }
+
+    function renderCriteriaRanking(weights) {
+        const wrap = document.getElementById('criteria-ranking-wrap');
+        const body = document.getElementById('criteria-ranking-body');
+        if (!wrap || !body) return;
+
+        const rows = keys.map((key, idx) => ({
+            key: key,
+            label: labels[idx],
+            weight: Number(weights[idx] || 0),
+        }));
+        rows.sort((a, b) => b.weight - a.weight);
+
+        body.innerHTML = '';
+        rows.forEach((row, idx) => {
+            const tr = document.createElement('tr');
+
+            const tdRank = document.createElement('td');
+            tdRank.textContent = String(idx + 1);
+
+            const tdLabel = document.createElement('td');
+            tdLabel.textContent = row.label;
+
+            const tdWeight = document.createElement('td');
+            tdWeight.textContent = row.weight.toFixed(6);
+
+            const tdPct = document.createElement('td');
+            tdPct.textContent = (row.weight * 100).toFixed(2) + '%';
+
+            tr.appendChild(tdRank);
+            tr.appendChild(tdLabel);
+            tr.appendChild(tdWeight);
+            tr.appendChild(tdPct);
+            body.appendChild(tr);
+        });
+
+        wrap.style.display = '';
+    }
+
+    function updateSubmitState(isOk, invalidExists) {
+        const submitBtn = document.getElementById('btn-submit-ranking');
+        const blockMsg = document.getElementById('cr-block-msg');
+
+        if (submitBtn) submitBtn.disabled = invalidExists || !isOk;
+
+        if (!blockMsg) return;
+        if (invalidExists) {
+            blockMsg.textContent = '⚠ Ma trận có ô nhập chưa hợp lệ. Vui lòng sửa trước khi chạy.';
+            blockMsg.style.display = 'inline';
+            return;
+        }
+
+        if (!isOk) {
+            blockMsg.textContent = '⚠ Ma trận chưa nhất quán (CR ≥ 0.1). Hãy điều chỉnh lại trước khi chạy.';
+            blockMsg.style.display = 'inline';
+            return;
+        }
+
+        blockMsg.style.display = 'none';
+    }
+
+    function computeAndUpdate(options) {
+        const opts = options || {};
+        const weights = computeWeights();
+        const cr = computeCR(weights);
+        const isOk = cr < 0.1;
+        const invalidExists = hasInvalidInputs();
+
+        keys.forEach((k, i) => {
+            const el = document.getElementById('hw_' + k);
+            if (el) el.value = Number(weights[i]).toFixed(8);
+        });
+
+        const crEl = document.getElementById('cr-display');
+        if (crEl) {
+            const crVal = cr.toFixed(4);
+            crEl.innerHTML = 'CR: ' + crVal + ' ' +
+                (isOk
+                    ? '<span style="color:var(--green);">✓ Nhất quán</span>'
+                    : '<span style="color:var(--red);">✗ Không nhất quán - hãy điều chỉnh lại</span>');
+        }
+
+        updateSubmitState(isOk, invalidExists);
+        persistMatrix();
+
+        const rankingWrap = document.getElementById('criteria-ranking-wrap');
+        const shouldRenderRanking = opts.showRanking || (rankingWrap && rankingWrap.style.display !== 'none');
+        if (shouldRenderRanking) {
+            renderCriteriaRanking(weights);
+        }
+
+        return { weights, cr, isOk, invalidExists };
+    }
+
+    matrix = loadMatrix();
+    buildMatrix();
+
+    const calcBtn = document.getElementById('btn-calc-criteria-weights');
+    if (calcBtn) {
+        calcBtn.addEventListener('click', function () {
+            if (hasInvalidInputs()) {
+                refreshValidationMessage('Ma trận có ô nhập chưa hợp lệ. Vui lòng sửa trước khi tính trọng số.');
+                return;
+            }
+            computeAndUpdate({ showRanking: true });
+        });
+    }
+
+    const resetBtn = document.getElementById('btn-reset-matrix');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            keys.forEach(k => {
+                const el = document.getElementById('hw_' + k);
+                if (el) {
+                    el.value = el.getAttribute('data-default') || '1';
+                }
+            });
+            matrix = matrixFromWeights();
+            hideMatrixValidation();
+            buildMatrix();
+            persistMatrix();
+        });
+    }
+
+    const submitBtn = document.getElementById('btn-submit-ranking');
+    const form = submitBtn ? submitBtn.closest('form') : null;
+    if (form) {
+        form.addEventListener('submit', function () {
+            persistMatrix();
+        });
+    }
+    }) ();
+</script>
+
 {% endblock %}

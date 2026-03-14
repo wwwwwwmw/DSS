@@ -98,6 +98,12 @@ def create_app() -> Flask:
         with session_scope(SessionLocal) as s:
             exists = s.query(CriteriaConfig).first()
             if exists:
+                # Always sync labels/directions from source to fix encoding
+                src = {c["key"]: c for c in CRITERIA}
+                for it in s.query(CriteriaConfig).all():
+                    if it.key in src:
+                        it.label = src[it.key]["label"]
+                        it.direction = src[it.key]["direction"]
                 return
             # Seed defaults as a normalized float weight vector.
             seed_raw = {c["key"]: float(c.get("default", 5)) for c in CRITERIA}
@@ -412,6 +418,40 @@ def create_app() -> Flask:
             out[key] = max(0.0, min(1e6, float(v)))
         return out
 
+    def parse_pairwise_matrix_from_form(n: int) -> Optional[List[List[float]]]:
+        """Parse pairwise matrix from hidden JSON field and enforce reciprocal shape."""
+
+        raw = request.form.get("pairwise_matrix_json", "").strip()
+        if not raw:
+            return None
+
+        try:
+            obj = json.loads(raw)
+        except Exception as e:
+            raise ValueError(f"Không đọc được ma trận so sánh cặp: {e}") from e
+
+        if not isinstance(obj, list) or len(obj) != n:
+            raise ValueError(f"Ma trận so sánh cặp phải có đúng {n} hàng.")
+
+        out: List[List[float]] = [[1.0 for _ in range(n)] for _ in range(n)]
+
+        for i, row in enumerate(obj):
+            if not isinstance(row, list) or len(row) != n:
+                raise ValueError(f"Hàng {i + 1} của ma trận phải có đúng {n} cột.")
+            for j in range(i + 1, n):
+                try:
+                    v = float(row[j])
+                except Exception as e:
+                    raise ValueError(f"Giá trị ô [{i + 1}, {j + 1}] không hợp lệ.") from e
+
+                if not math.isfinite(v) or v <= 0:
+                    raise ValueError(f"Giá trị ô [{i + 1}, {j + 1}] phải là số > 0.")
+
+                out[i][j] = v
+                out[j][i] = 1.0 / v
+
+        return out
+
     def ahp_score_single_against_df(car: Dict[str, Any], weights: Dict[str, float], df) -> float:
         """Compute AHP score for a single car using min/max bounds from a reference dataframe."""
 
@@ -463,7 +503,17 @@ def create_app() -> Flask:
     @app.get("/")
     def home():
         criteria = load_criteria()
-        return render_template("index.html", criteria=criteria, results=None, top_recommendations=None)
+        return render_template(
+            "index.html",
+            criteria=criteria,
+            results=None,
+            top_recommendations=None,
+            high_risk_results=None,
+            cars=None,
+            weights=None,
+            chart_data=None,
+            pairwise_matrix=None,
+        )
 
     @app.route("/evaluate", methods=["GET", "POST"])
     def evaluate():
@@ -477,17 +527,39 @@ def create_app() -> Flask:
                 results=None,
                 cars=None,
                 weights=None,
+                chart_data=None,
+                pairwise_matrix=None,
             )
+
+        pairwise_matrix = None
+        weights = parse_weights_from_form(criteria)
+        try:
+            pairwise_matrix = parse_pairwise_matrix_from_form(len(criteria))
+            if pairwise_matrix:
+                ahp_res = compute_ahp_weights(pairwise_matrix)
+                weights = {
+                    criteria[i]["key"]: float(ahp_res.weights[i])
+                    for i in range(len(criteria))
+                }
+        except Exception as e:
+            flash(f"Ma trận AHP không hợp lệ: {e}", "danger")
 
         cars = parse_cars_from_form()
         errors = validate_cars(cars, min_cars=1)
         if errors:
             for e in errors[:6]:
                 flash(e, "danger")
-            return redirect(url_for("evaluate"))
+            return render_template(
+                "evaluate.html",
+                criteria=criteria,
+                results=None,
+                cars=cars,
+                weights=weights,
+                chart_data=None,
+                pairwise_matrix=pairwise_matrix,
+            )
 
-        weights = parse_weights_from_form(criteria)
-        scores = ahp_score(cars, weights)
+        scores, ahp_details = ahp_score(cars, weights)
 
         models = get_models()
         if not models:
@@ -551,23 +623,61 @@ def create_app() -> Flask:
             summary += " • so với thị trường"
         save_history(action="evaluate", cars=cars, payload=payload, summary=summary)
 
+        # --- Build chart data for frontend ---
+        normalized_weights = normalize_weights(weights)
+        chart_data = sanitize_for_json({
+            "criteria_keys": [c["key"] for c in criteria],
+            "criteria_labels": [c["label"].split(":")[0].strip() for c in criteria],
+            "criteria_directions": [c["direction"] for c in criteria],
+            "weights": normalized_weights,
+            "cars": cars,
+            "ahp_details": ahp_details,
+            "scores": scores,
+        })
+
         return render_template(
             "evaluate.html",
             criteria=criteria,
             results=results,
             cars=cars,
             weights=weights,
+            chart_data=chart_data,
+            pairwise_matrix=pairwise_matrix,
         )
 
     @app.post("/recommend")
     def recommend():
         criteria = load_criteria()
+
+        pairwise_matrix = None
+        weights = parse_weights_from_form(criteria)
+        try:
+            pairwise_matrix = parse_pairwise_matrix_from_form(len(criteria))
+            if pairwise_matrix:
+                ahp_res = compute_ahp_weights(pairwise_matrix)
+                weights = {
+                    criteria[i]["key"]: float(ahp_res.weights[i])
+                    for i in range(len(criteria))
+                }
+        except Exception as e:
+            flash(f"Ma trận AHP không hợp lệ: {e}", "danger")
+
         cars = parse_cars_from_form()
         errors = validate_cars(cars, min_cars=2)
         if errors:
             for e in errors[:6]:
                 flash(e, "danger")
-            return redirect(url_for("home"))
+            return render_template(
+                "index.html",
+                criteria=criteria,
+                results=None,
+                high_risk_results=None,
+                top_recommendations=None,
+                cars=cars,
+                weights=weights,
+                chart_data=None,
+                pairwise_matrix=pairwise_matrix,
+            )
 
         # Predict risk first, then filter high-risk cars out BEFORE AHP ranking.
         models = get_models()
@@ -611,11 +721,10 @@ def create_app() -> Flask:
                 }
             )
 
-        weights = parse_weights_from_form(criteria)
         safe_cars = [cars[i] for i in safe_idx]
         safe_acc = [accident_probs[i] for i in safe_idx]
         safe_maint = [maint_monthly[i] for i in safe_idx]
-        safe_scores = ahp_score(safe_cars, weights) if safe_cars else []
+        safe_scores, safe_ahp_details = ahp_score(safe_cars, weights) if safe_cars else ([], [])
 
         results: List[Dict[str, Any]] = []
         for local_i, (s, ap, mm) in enumerate(zip(safe_scores, safe_acc, safe_maint)):
@@ -650,6 +759,18 @@ def create_app() -> Flask:
         summary = f"Tư vấn: Top xe #{top_recommendations[0]['idx']}" if top_recommendations else "Tư vấn: Không có xe xanh"
         save_history(action="recommend", cars=cars, payload=payload, summary=summary)
 
+        # --- Build chart data for frontend ---
+        normalized_weights = normalize_weights(weights)
+        chart_data = sanitize_for_json({
+            "criteria_keys": [c["key"] for c in criteria],
+            "criteria_labels": [c["label"].split(":")[0].strip() for c in criteria],
+            "criteria_directions": [c["direction"] for c in criteria],
+            "weights": normalized_weights,
+            "cars": safe_cars,
+            "ahp_details": safe_ahp_details,
+            "scores": safe_scores,
+        })
+
         return render_template(
             "index.html",
             criteria=criteria,
@@ -658,6 +779,8 @@ def create_app() -> Flask:
             top_recommendations=top_recommendations,
             cars=cars,
             weights=weights,
+            chart_data=chart_data,
+            pairwise_matrix=pairwise_matrix,
         )
 
     @app.route("/compare", methods=["GET", "POST"])
