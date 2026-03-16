@@ -105,6 +105,70 @@
                     <tbody id="criteria-ranking-body"></tbody>
                 </table>
             </div>
+
+            {% if option_matrix and option_matrix.criterion_pairwise_tables %}
+            <div id="option-score-matrix-wrap" class="card" style="margin-top:12px;">
+                <h4 style="margin:0 0 10px;">Ma trận phương án theo từng tiêu chí</h4>
+                <div class="small" style="margin-bottom:10px;">
+                    Theo AHP, mỗi tiêu chí có 1 ma trận so sánh cặp phương án (3×3).
+                    Tổng cộng có {{ option_matrix.criterion_pairwise_tables|length }} bảng cho {{ criteria|length }}
+                    tiêu chí.
+                </div>
+
+                {% for t in option_matrix.criterion_pairwise_tables %}
+                <div class="ahp-alt-wrap" style="margin:10px 0 14px;">
+                    <div class="small" style="margin-bottom:6px;">
+                        <b>{{ loop.index }}. Pair-wise Comparison matrix (Alternatives - 3×3) theo {{ t.criterion_label
+                            }}</b>
+                        • trọng số tiêu chí: {{ '%.2f'|format(t.weight_pct) }}%
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="table ahp-alt-table">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>{{ t.option_labels[0] }}</th>
+                                    <th>{{ t.option_labels[1] }}</th>
+                                    <th>{{ t.option_labels[2] }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <th>{{ t.option_labels[0] }}</th>
+                                    <td>{{ '%.3f'|format(t.matrix[0][0]) }}</td>
+                                    <td>{{ '%.3f'|format(t.matrix[0][1]) }}</td>
+                                    <td>{{ '%.3f'|format(t.matrix[0][2]) }}</td>
+                                </tr>
+                                <tr>
+                                    <th>{{ t.option_labels[1] }}</th>
+                                    <td>{{ '%.3f'|format(t.matrix[1][0]) }}</td>
+                                    <td>{{ '%.3f'|format(t.matrix[1][1]) }}</td>
+                                    <td>{{ '%.3f'|format(t.matrix[1][2]) }}</td>
+                                </tr>
+                                <tr>
+                                    <th>{{ t.option_labels[2] }}</th>
+                                    <td>{{ '%.3f'|format(t.matrix[2][0]) }}</td>
+                                    <td>{{ '%.3f'|format(t.matrix[2][1]) }}</td>
+                                    <td>{{ '%.3f'|format(t.matrix[2][2]) }}</td>
+                                </tr>
+                                <tr class="sum-row">
+                                    <th>Sum</th>
+                                    <td>{{ '%.3f'|format(t.col_sums[0]) }}</td>
+                                    <td>{{ '%.3f'|format(t.col_sums[1]) }}</td>
+                                    <td>{{ '%.3f'|format(t.col_sums[2]) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="small" style="margin-top:8px;">
+                    Số xe theo phương án: Nên mua ngay = {{ option_matrix.counts.green }}, Nên cân nhắc = {{
+                    option_matrix.counts.yellow }}, Không nên mua = {{ option_matrix.counts.red }}.
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <h3>2) Thông tin xe (tối thiểu 2)</h3>
@@ -668,6 +732,17 @@
     #criteria-ranking-body tr:first-child td {
         color: var(--green);
         font-weight: 600;
+    }
+
+    .ahp-alt-table td:nth-child(n+2),
+    .ahp-alt-table th:nth-child(n+2) {
+        text-align: center;
+    }
+
+    .ahp-alt-table .sum-row th,
+    .ahp-alt-table .sum-row td {
+        color: var(--blue);
+        font-weight: 700;
     }
 
     #btn-submit-ranking:disabled {

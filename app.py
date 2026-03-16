@@ -452,6 +452,143 @@ def create_app() -> Flask:
 
         return out
 
+    def build_option_score_matrix(
+        *,
+        criteria: List[Dict[str, Any]],
+        weights: Dict[str, float],
+        details_by_car_idx: Dict[int, Dict[str, float]],
+        badge_by_car_idx: Dict[int, str],
+    ) -> Dict[str, Any]:
+        """Build AHP alternative matrices for 3 recommendation options.
+
+        Returns:
+            - summary rows/totals (0-100 scale) for each criterion and option
+            - 9 pairwise 3x3 matrices (1 per criterion) with a column-sum row
+        """
+
+        normalized_weights = normalize_weights(weights)
+        groups: Dict[str, List[Dict[str, float]]] = {"green": [], "yellow": [], "red": []}
+
+        for idx, detail in details_by_car_idx.items():
+            badge = badge_by_car_idx.get(int(idx))
+            if badge in groups and isinstance(detail, dict):
+                groups[badge].append(detail)
+
+        option_meta = [
+            ("green", "Phương án 1: Nên mua ngay"),
+            ("yellow", "Phương án 2: Nên cân nhắc"),
+            ("red", "Phương án 3: Không nên mua"),
+        ]
+
+        def avg_scaled(key: str, badge: str) -> Optional[float]:
+            rows = groups.get(badge) or []
+            if not rows:
+                return None
+
+            w = float(normalized_weights.get(key, 0.0))
+            if w <= 1e-12:
+                return 0.0
+
+            vals: List[float] = []
+            for d in rows:
+                try:
+                    contrib = float(d.get(key, 0.0))
+                except Exception:
+                    contrib = 0.0
+                scaled = contrib / w
+                if scaled < 0:
+                    scaled = 0.0
+                elif scaled > 1:
+                    scaled = 1.0
+                vals.append(float(scaled))
+
+            return float(sum(vals) / len(vals)) if vals else None
+
+        rows_out: List[Dict[str, Any]] = []
+        criterion_pairwise_tables: List[Dict[str, Any]] = []
+
+        def clamp_ahp_ratio(v: float) -> float:
+            if v < (1.0 / 9.0):
+                return 1.0 / 9.0
+            if v > 9.0:
+                return 9.0
+            return float(v)
+
+        for c in criteria:
+            key = c["key"]
+            label = c["label"].split(":", 1)[0].strip()
+            row = {
+                "key": key,
+                "label": label,
+                "weight_pct": float(normalized_weights.get(key, 0.0)) * 100.0,
+                "green": None,
+                "yellow": None,
+                "red": None,
+            }
+
+            for b in ("green", "yellow", "red"):
+                val = avg_scaled(key, b)
+                row[b] = (float(val) * 100.0) if val is not None else None
+
+            rows_out.append(row)
+
+            # Build pairwise comparison matrix (Alternatives 3x3) for this criterion.
+            scores_for_ratio: List[float] = []
+            for badge, _lbl in option_meta:
+                v = avg_scaled(key, badge)
+                # If a group is absent, use neutral baseline so matrix remains defined.
+                scores_for_ratio.append(0.5 if v is None else float(v))
+
+            m = [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]
+            for i in range(3):
+                for j in range(i + 1, 3):
+                    den = float(scores_for_ratio[j])
+                    num = float(scores_for_ratio[i])
+                    ratio = 9.0 if den <= 1e-12 else (num / den)
+                    ratio = clamp_ahp_ratio(ratio)
+                    m[i][j] = float(ratio)
+                    m[j][i] = float(1.0 / ratio)
+
+            col_sums = [
+                float(m[0][j] + m[1][j] + m[2][j])
+                for j in range(3)
+            ]
+
+            criterion_pairwise_tables.append(
+                {
+                    "criterion_key": key,
+                    "criterion_label": label,
+                    "weight_pct": float(normalized_weights.get(key, 0.0)) * 100.0,
+                    "option_labels": [lbl for _badge, lbl in option_meta],
+                    "matrix": m,
+                    "col_sums": col_sums,
+                }
+            )
+
+        totals: Dict[str, Optional[float]] = {"green": None, "yellow": None, "red": None}
+        for b in ("green", "yellow", "red"):
+            if not groups.get(b):
+                continue
+            s = 0.0
+            for c in criteria:
+                key = c["key"]
+                val = avg_scaled(key, b)
+                if val is None:
+                    continue
+                s += float(normalized_weights.get(key, 0.0)) * float(val)
+            totals[b] = s * 100.0
+
+        return {
+            "rows": rows_out,
+            "counts": {
+                "green": len(groups["green"]),
+                "yellow": len(groups["yellow"]),
+                "red": len(groups["red"]),
+            },
+            "totals": totals,
+            "criterion_pairwise_tables": criterion_pairwise_tables,
+        }
+
     def ahp_score_single_against_df(car: Dict[str, Any], weights: Dict[str, float], df) -> float:
         """Compute AHP score for a single car using min/max bounds from a reference dataframe."""
 
@@ -513,6 +650,7 @@ def create_app() -> Flask:
             weights=None,
             chart_data=None,
             pairwise_matrix=None,
+            option_matrix=None,
         )
 
     @app.route("/evaluate", methods=["GET", "POST"])
@@ -677,6 +815,7 @@ def create_app() -> Flask:
                 weights=weights,
                 chart_data=None,
                 pairwise_matrix=pairwise_matrix,
+                option_matrix=None,
             )
 
         # Predict risk first, then filter high-risk cars out BEFORE AHP ranking.
@@ -755,6 +894,24 @@ def create_app() -> Flask:
 
         top_recommendations = [r for r in results if r["badge"] == "green"]
 
+        # --- Option matrix (per-criterion scoring for the 3 recommendation options) ---
+        _all_scores, all_ahp_details = ahp_score(cars, weights) if cars else ([], [])
+        details_by_car_idx: Dict[int, Dict[str, float]] = {
+            i + 1: all_ahp_details[i] for i in range(len(all_ahp_details))
+        }
+        badge_by_car_idx: Dict[int, str] = {}
+        for r in results:
+            badge_by_car_idx[int(r["idx"])] = str(r.get("badge") or "")
+        for r in high_risk_results:
+            badge_by_car_idx[int(r["idx"])] = "red"
+
+        option_matrix = build_option_score_matrix(
+            criteria=criteria,
+            weights=weights,
+            details_by_car_idx=details_by_car_idx,
+            badge_by_car_idx=badge_by_car_idx,
+        )
+
         payload = _safe_json_loads(serialize_payload(weights, cars, results)) or {"weights": weights, "cars": cars, "results": results}
         summary = f"Tư vấn: Top xe #{top_recommendations[0]['idx']}" if top_recommendations else "Tư vấn: Không có xe xanh"
         save_history(action="recommend", cars=cars, payload=payload, summary=summary)
@@ -781,6 +938,7 @@ def create_app() -> Flask:
             weights=weights,
             chart_data=chart_data,
             pairwise_matrix=pairwise_matrix,
+            option_matrix=option_matrix,
         )
 
     @app.route("/compare", methods=["GET", "POST"])
