@@ -106,14 +106,71 @@
                     <tbody id="criteria-ranking-body"></tbody>
                 </table>
             </div>
+
+            {% if option_matrix and option_matrix.criterion_pairwise_tables %}
+            <div id="option-score-matrix-wrap" class="card" style="margin-top:12px;">
+                <h4 style="margin:0 0 10px;">Ma trận phương án theo từng tiêu chí</h4>
+                <div class="small" style="margin-bottom:10px;">
+                    Theo AHP, mỗi tiêu chí có 1 ma trận so sánh cặp phương án.
+                    Tổng cộng có {{ option_matrix.criterion_pairwise_tables|length }} bảng cho {{ criteria|length }}
+                    tiêu chí, với {{ option_matrix.car_count }} phương án tương ứng số xe bạn đã nhập.
+                </div>
+
+                <div class="criterion-tabs" role="tablist" aria-label="Chọn tiêu chí để xem ma trận phương án">
+                    {% for t in option_matrix.criterion_pairwise_tables %}
+                    <button type="button" class="criterion-tab-btn {% if loop.first %}active{% endif %}"
+                        data-criterion-tab="criterion-pane-{{ loop.index0 }}">
+                        {{ t.criterion_label }}
+                    </button>
+                    {% endfor %}
+                </div>
+
+                {% for t in option_matrix.criterion_pairwise_tables %}
+                <div id="criterion-pane-{{ loop.index0 }}" class="criterion-pane {% if loop.first %}active{% endif %}">
+                    <div class="small" style="margin-bottom:6px;">
+                        <b>{{ loop.index }}. Ma trận so sánh cặp phương án theo tiêu chí {{ t.criterion_label }}</b>
+                        • trọng số tiêu chí: {{ '%.2f'|format(t.weight_pct) }}%
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="table ahp-alt-table">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    {% for opt in t.option_labels %}
+                                    <th>{{ opt }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for i in range(t.option_labels|length) %}
+                                <tr>
+                                    <th>{{ t.option_labels[i] }}</th>
+                                    {% for j in range(t.option_labels|length) %}
+                                    <td>{{ '%.3f'|format(t.matrix[i][j]) }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                                <tr class="sum-row">
+                                    <th>Tổng</th>
+                                    {% for s in t.col_sums %}
+                                    <td>{{ '%.3f'|format(s) }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
 
-        <h3>2) Thông tin xe (tối thiểu 1)</h3>
+        <h3>2) Thông tin xe (tối thiểu 3)</h3>
         <div class="small">Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.</div>
 
         <div class="flash danger client-errors" style="display:none"></div>
 
-        <div data-car-form="1" data-min="1">
+        <div data-car-form="1" data-min="3">
             {% if current_user.is_authenticated %}
             <div class="card saved-import" style="margin:10px 0;">
                 <div class="small"><b>Chọn từ "Xe của tôi"</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
@@ -127,7 +184,7 @@
             {% endif %}
 
             <div class="actions" style="margin:10px 0;">
-                <div class="small">Bạn có thể thêm nhiều xe, nhưng tối thiểu 1 xe là đủ.</div>
+                <div class="small">Bạn có thể thêm nhiều xe, nhưng tối thiểu 3 xe là đủ.</div>
                 <button class="btn secondary btn-add-car" type="button">+ Thêm xe</button>
             </div>
 
@@ -191,38 +248,41 @@
                 </div>
                 {% endfor %}
                 {% else %}
-                <div class="card car-card" data-prefix="car" data-index="0" style="margin:12px 0;">
+                {% for i in range(0, 3) %}
+                <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
                     <div class="actions">
-                        <b class="car-title">Xe #1</b>
+                        <b class="car-title">Xe #{{ i+1 }}</b>
                         <button class="btn danger btn-remove-car" type="button">Xoá</button>
                     </div>
                     <div class="grid">
-                        <div class="col-3"><label>Giá bán ($)*</label><input name="car0_price"
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car{{i}}_price"
                                 placeholder="vd: 24000" />
                         </div>
-                        <div class="col-3"><label>Số dặm*</label><input name="car0_mileage" placeholder="vd: 52000" />
+                        <div class="col-3"><label>Số dặm*</label><input name="car{{i}}_mileage"
+                                placeholder="vd: 52000" />
                         </div>
-                        <div class="col-3"><label>Năm sản xuất*</label><input name="car0_year" placeholder="vd: 2019" />
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car{{i}}_year"
+                                placeholder="vd: 2019" />
                         </div>
                         <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
-                            <select name="car0_accidents_or_damage">
+                            <select name="car{{i}}_accidents_or_damage">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Không</option>
                                 <option value="1">1 - Có</option>
                             </select>
                         </div>
                         <div class="col-3"><label>Một chủ duy nhất*</label>
-                            <select name="car0_one_owner">
+                            <select name="car{{i}}_one_owner">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0 - Nhiều chủ</option>
                                 <option value="1" selected>1 - Một chủ</option>
                             </select>
                         </div>
-                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car0_mpg"
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car{{i}}_mpg"
                                 placeholder="vd: 30 hoặc 39-38" />
                         </div>
                         <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
-                            <select name="car0_driver_rating">
+                            <select name="car{{i}}_driver_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
                                 <option value="1">1</option>
@@ -233,7 +293,7 @@
                             </select>
                         </div>
                         <div class="col-3"><label>Đánh giá người bán (0-5)</label>
-                            <select name="car0_seller_rating">
+                            <select name="car{{i}}_seller_rating">
                                 <option value="">-- Chọn --</option>
                                 <option value="0">0</option>
                                 <option value="1">1</option>
@@ -243,10 +303,11 @@
                                 <option value="5">5</option>
                             </select>
                         </div>
-                        <div class="col-3"><label>Giảm giá ($)</label><input name="car0_price_drop"
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car{{i}}_price_drop"
                                 placeholder="vd: 500" /></div>
                     </div>
                 </div>
+                {% endfor %}
                 {% endif %}
             </div>
 
@@ -350,6 +411,9 @@
         <div class="card" {{ card_attr|safe }}>
 
             <h4 style="margin:0 0 6px 0;">Xe #{{ r.idx }}</h4>
+            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+                <span class="badge {{ r.badge }}">Phương án: {{ r.option }}</span>
+            </div>
 
             {% if r.explanation %}
             {# --- Label + summary metrics --- #}
@@ -381,13 +445,6 @@
             {% else %}
             {# Fallback when market stats not available #}
             <div style="margin-bottom:6px;">
-                {% if r.badge == 'green' %}
-                <span class="badge green">Đáng mua</span>
-                {% elif r.badge == 'yellow' %}
-                <span class="badge yellow">Cân nhắc</span>
-                {% else %}
-                <span class="badge red">Không nên mua</span>
-                {% endif %}
                 <span class="small">AHP: {{ '%.3f'|format(r.ahp_score) }}</span>
             </div>
             <div class="small">{{ r.message }}</div>
@@ -674,6 +731,55 @@
         font-weight: 600;
     }
 
+    .criterion-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .criterion-tab-btn {
+        border: 1px solid var(--border);
+        background: #0b1220;
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 12px;
+        cursor: pointer;
+        font-size: .92rem;
+        transition: all .2s ease;
+    }
+
+    .criterion-tab-btn:hover {
+        color: var(--text);
+        border-color: var(--blue);
+    }
+
+    .criterion-tab-btn.active {
+        background: var(--blue);
+        color: #fff;
+        border-color: var(--blue);
+    }
+
+    .criterion-pane {
+        display: none;
+        margin: 10px 0 14px;
+    }
+
+    .criterion-pane.active {
+        display: block;
+    }
+
+    .ahp-alt-table td:nth-child(n+2),
+    .ahp-alt-table th:nth-child(n+2) {
+        text-align: center;
+    }
+
+    .ahp-alt-table .sum-row th,
+    .ahp-alt-table .sum-row td {
+        color: var(--blue);
+        font-weight: 700;
+    }
+
     #btn-submit-ranking:disabled {
         opacity: .45;
         cursor: not-allowed;
@@ -726,6 +832,38 @@
                 });
             });
         });
+    })();
+</script>
+
+<script>
+    (function () {
+        var wrap = document.getElementById('option-score-matrix-wrap');
+        if (!wrap) return;
+
+        var buttons = wrap.querySelectorAll('.criterion-tab-btn');
+        var panes = wrap.querySelectorAll('.criterion-pane');
+        if (!buttons.length || !panes.length) return;
+
+        function activate(tabId) {
+            buttons.forEach(function (btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-criterion-tab') === tabId);
+            });
+            panes.forEach(function (pane) {
+                pane.classList.toggle('active', pane.id === tabId);
+            });
+        }
+
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tabId = btn.getAttribute('data-criterion-tab');
+                if (!tabId) return;
+                activate(tabId);
+            });
+        });
+
+        var firstActive = wrap.querySelector('.criterion-tab-btn.active');
+        var initialTabId = firstActive ? firstActive.getAttribute('data-criterion-tab') : buttons[0].getAttribute('data-criterion-tab');
+        if (initialTabId) activate(initialTabId);
     })();
 </script>
 

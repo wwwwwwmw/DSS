@@ -626,12 +626,16 @@ def choose_option(
 
     risk_pct = accident_risk * 100.0
 
+    option_green = "Phương án 1: NÊN MUA NGAY (ƯU TIÊN)"
+    option_yellow = "Phương án 2: NÊN CÂN NHẮC"
+    option_red = "Phương án 3: KHÔNG NÊN MUA"
+
     # --- Market mode (evaluate) -----------------------------------------
     if percentile is not None:
         badge, label = _determine_label(risk_pct, percentile)
         if badge == "green":
             return (
-                "Phương án 1: NÊN MUA (ƯU TIÊN)",
+                option_green,
                 "green",
                 f"AI Risk {risk_pct:.0f}% < 30% & Percentile {percentile:.0f}% > 70%. Nên mua.",
             )
@@ -642,22 +646,31 @@ def choose_option(
             if percentile < 30:
                 reasons.append(f"Percentile {percentile:.0f}% < 30%")
             return (
-                "Phương án 3: KHÔNG NÊN MUA",
+                option_red,
                 "red",
                 " & ".join(reasons) + ". Nên tìm lựa chọn khác.",
             )
         return (
-            "Phương án 2: CẦN CÂN NHẮC",
+            option_yellow,
             "yellow",
             f"AI Risk {risk_pct:.0f}%, Percentile {percentile:.0f}%. Cần xem xét thêm.",
         )
 
     # --- Group mode (recommend) ------------------------------------------
-    if accident_risk > 0.60:
+    risk_high = accident_risk >= 0.60
+    maint_high = maint_monthly >= 300.0
+
+    if risk_high:
+        if maint_high:
+            return (
+                option_red,
+                "red",
+                f"Không nên mua vì rủi ro tai nạn cao ({risk_pct:.0f}%) và chi phí bảo dưỡng cao (~${maint_monthly:.0f}/tháng).",
+            )
         return (
-            "Phương án 3: RỦI RO TAI NẠN CAO",
+            option_red,
             "red",
-            f"Rủi ro tai nạn {risk_pct:.0f}% > 60%. Nên loại hoặc kiểm tra lịch sử tai nạn rất kỹ.",
+            f"Không nên mua vì rủi ro tai nạn cao ({risk_pct:.0f}%). Nên loại hoặc kiểm tra lịch sử tai nạn rất kỹ.",
         )
 
     maint_pen = min(1.0, max(0.0, maint_monthly / 500.0))
@@ -665,20 +678,35 @@ def choose_option(
 
     if ahp >= 0.45 and composite >= 0.58:
         return (
-            "Phương án 1: NÊN MUA (ƯU TIÊN)",
+            option_green,
             "green",
             "Điểm AHP tốt và rủi ro/chi phí hợp lý. Ưu tiên thương lượng và kiểm tra nhanh.",
         )
     if composite >= 0.48:
         return (
-            "Phương án 2: CẦN CÂN NHẮC",
+            option_yellow,
             "yellow",
             "Khá ổn nhưng nên so sánh thêm và kiểm định tại gara trước khi chốt.",
         )
+
+    if risk_high and maint_high:
+        red_reason = (
+            f"Không nên mua vì rủi ro tai nạn cao ({risk_pct:.0f}%) và chi phí bảo dưỡng cao (~${maint_monthly:.0f}/tháng)."
+        )
+    elif risk_high:
+        red_reason = f"Không nên mua vì rủi ro tai nạn cao ({risk_pct:.0f}%)."
+    elif maint_high:
+        red_reason = f"Không nên mua vì chi phí bảo dưỡng cao (~${maint_monthly:.0f}/tháng)."
+    else:
+        red_reason = (
+            f"Không nên mua vì điểm tổng hợp thấp (AHP {ahp:.3f}). "
+            "Rủi ro và chi phí chưa cao nhưng xe chưa đủ nổi trội theo bộ tiêu chí."
+        )
+
     return (
-        "Phương án 3: RỦI RO/CHI PHÍ CAO",
+        option_red,
         "red",
-        "Điểm tổng hợp thấp do rủi ro hoặc chi phí bảo dưỡng cao. Nên tìm lựa chọn khác.",
+        red_reason,
     )
 
 

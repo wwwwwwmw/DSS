@@ -516,7 +516,12 @@ def create_app() -> Flask:
 
         for c in criteria:
             key = c["key"]
-            label = c["label"].split(":", 1)[0].strip()
+            raw_label = str(c.get("label") or key)
+            if ":" in raw_label:
+                # Prefer the human-friendly Vietnamese part after the key prefix.
+                label = raw_label.split(":", 1)[1].strip()
+            else:
+                label = raw_label.strip()
             row = {
                 "key": key,
                 "label": label,
@@ -586,6 +591,96 @@ def create_app() -> Flask:
                 "red": len(groups["red"]),
             },
             "totals": totals,
+            "criterion_pairwise_tables": criterion_pairwise_tables,
+        }
+
+    def build_car_option_matrix(
+        *,
+        criteria: List[Dict[str, Any]],
+        weights: Dict[str, float],
+        details_by_car_idx: Dict[int, Dict[str, float]],
+    ) -> Dict[str, Any]:
+        """Build per-criterion pairwise matrices where alternatives are user-entered cars.
+
+        For evaluate mode, options are dynamic: Xe #1, Xe #2, ..., Xe #N.
+        """
+
+        normalized_weights = normalize_weights(weights)
+        car_indices = sorted(int(i) for i in details_by_car_idx.keys())
+        option_labels = [f"Xe #{i}" for i in car_indices]
+
+        def clamp_ahp_ratio(v: float) -> float:
+            if v < (1.0 / 9.0):
+                return 1.0 / 9.0
+            if v > 9.0:
+                return 9.0
+            return float(v)
+
+        def scaled_value(detail: Dict[str, float], key: str, w: float) -> float:
+            if w <= 1e-12:
+                return 0.0
+            try:
+                contrib = float(detail.get(key, 0.0))
+            except Exception:
+                contrib = 0.0
+            v = contrib / w
+            if v < 0.0:
+                return 0.0
+            if v > 1.0:
+                return 1.0
+            return float(v)
+
+        criterion_pairwise_tables: List[Dict[str, Any]] = []
+        m = len(option_labels)
+
+        for c in criteria:
+            key = c["key"]
+            raw_label = str(c.get("label") or key)
+            if ":" in raw_label:
+                label = raw_label.split(":", 1)[1].strip()
+            else:
+                label = raw_label.strip()
+
+            w = float(normalized_weights.get(key, 0.0))
+            scores_for_ratio: List[float] = []
+            for idx in car_indices:
+                detail = details_by_car_idx.get(idx) or {}
+                scores_for_ratio.append(scaled_value(detail, key, w))
+
+            matrix = [[1.0 for _ in range(m)] for _ in range(m)]
+            for i in range(m):
+                for j in range(i + 1, m):
+                    num = float(scores_for_ratio[i])
+                    den = float(scores_for_ratio[j])
+
+                    if num <= 1e-12 and den <= 1e-12:
+                        ratio = 1.0
+                    else:
+                        ratio = 9.0 if den <= 1e-12 else (num / den)
+
+                    ratio = clamp_ahp_ratio(ratio)
+                    matrix[i][j] = float(ratio)
+                    matrix[j][i] = float(1.0 / ratio)
+
+            col_sums = [
+                float(sum(matrix[i][j] for i in range(m)))
+                for j in range(m)
+            ]
+
+            criterion_pairwise_tables.append(
+                {
+                    "criterion_key": key,
+                    "criterion_label": label,
+                    "weight_pct": w * 100.0,
+                    "option_labels": option_labels,
+                    "matrix": matrix,
+                    "col_sums": col_sums,
+                }
+            )
+
+        return {
+            "car_count": m,
+            "option_labels": option_labels,
             "criterion_pairwise_tables": criterion_pairwise_tables,
         }
 
@@ -667,6 +762,7 @@ def create_app() -> Flask:
                 weights=None,
                 chart_data=None,
                 pairwise_matrix=None,
+                option_matrix=None,
             )
 
         pairwise_matrix = None
@@ -683,7 +779,7 @@ def create_app() -> Flask:
             flash(f"Ma trận AHP không hợp lệ: {e}", "danger")
 
         cars = parse_cars_from_form()
-        errors = validate_cars(cars, min_cars=1)
+        errors = validate_cars(cars, min_cars=3)
         if errors:
             for e in errors[:6]:
                 flash(e, "danger")
@@ -695,6 +791,7 @@ def create_app() -> Flask:
                 weights=weights,
                 chart_data=None,
                 pairwise_matrix=pairwise_matrix,
+                option_matrix=None,
             )
 
         scores, ahp_details = ahp_score(cars, weights)
@@ -727,7 +824,8 @@ def create_app() -> Flask:
                     car, market_stats, float(ap), float(mm), mkt_pos, float(s),
                 )
 
-            option, badge, message = choose_option(float(s), float(ap), float(mm), percentile=percentile)
+            _option_eval, badge, message = choose_option(float(s), float(ap), float(mm), percentile=percentile)
+            option = f"Xe #{idx}"
 
             results.append(
                 {
@@ -746,6 +844,15 @@ def create_app() -> Flask:
                     "explanation": explanation,
                 }
             )
+
+        details_by_car_idx: Dict[int, Dict[str, float]] = {
+            i + 1: ahp_details[i] for i in range(len(ahp_details))
+        }
+        option_matrix = build_car_option_matrix(
+            criteria=criteria,
+            weights=weights,
+            details_by_car_idx=details_by_car_idx,
+        )
 
         # History
         payload = {
@@ -781,6 +888,7 @@ def create_app() -> Flask:
             weights=weights,
             chart_data=chart_data,
             pairwise_matrix=pairwise_matrix,
+            option_matrix=option_matrix,
         )
 
     @app.post("/recommend")
@@ -801,7 +909,7 @@ def create_app() -> Flask:
             flash(f"Ma trận AHP không hợp lệ: {e}", "danger")
 
         cars = parse_cars_from_form()
-        errors = validate_cars(cars, min_cars=2)
+        errors = validate_cars(cars, min_cars=1)
         if errors:
             for e in errors[:6]:
                 flash(e, "danger")

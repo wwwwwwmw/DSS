@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
     <h2>Tư vấn mua xe</h2>
-    <div class="small">Nhập tối thiểu 2 xe để hệ thống xếp hạng và gợi ý phương án.</div>
+    <div class="small">Nhập tối thiểu 1 xe để hệ thống xếp hạng và gợi ý phương án.</div>
 </div>
 
 <div class="card">
@@ -115,10 +115,19 @@
                     tiêu chí.
                 </div>
 
+                <div class="criterion-tabs" role="tablist" aria-label="Chọn tiêu chí để xem ma trận phương án">
+                    {% for t in option_matrix.criterion_pairwise_tables %}
+                    <button type="button" class="criterion-tab-btn {% if loop.first %}active{% endif %}"
+                        data-criterion-tab="criterion-pane-{{ loop.index0 }}">
+                        {{ t.criterion_label }}
+                    </button>
+                    {% endfor %}
+                </div>
+
                 {% for t in option_matrix.criterion_pairwise_tables %}
-                <div class="ahp-alt-wrap" style="margin:10px 0 14px;">
+                <div id="criterion-pane-{{ loop.index0 }}" class="criterion-pane {% if loop.first %}active{% endif %}">
                     <div class="small" style="margin-bottom:6px;">
-                        <b>{{ loop.index }}. Pair-wise Comparison matrix (Alternatives - 3×3) theo {{ t.criterion_label
+                        <b>{{ loop.index }}. Ma trận so sánh cặp phương án (3×3) theo tiêu chí {{ t.criterion_label
                             }}</b>
                         • trọng số tiêu chí: {{ '%.2f'|format(t.weight_pct) }}%
                     </div>
@@ -152,7 +161,7 @@
                                     <td>{{ '%.3f'|format(t.matrix[2][2]) }}</td>
                                 </tr>
                                 <tr class="sum-row">
-                                    <th>Sum</th>
+                                    <th>Tổng</th>
                                     <td>{{ '%.3f'|format(t.col_sums[0]) }}</td>
                                     <td>{{ '%.3f'|format(t.col_sums[1]) }}</td>
                                     <td>{{ '%.3f'|format(t.col_sums[2]) }}</td>
@@ -171,12 +180,12 @@
             {% endif %}
         </div>
 
-        <h3>2) Thông tin xe (tối thiểu 2)</h3>
+        <h3>2) Thông tin xe (tối thiểu 1)</h3>
         <div class="small">Nếu đã nhập 1 trường của xe thì cần nhập đủ các trường bắt buộc.</div>
 
         <div class="flash danger client-errors" style="display:none"></div>
 
-        <div data-car-form="1" data-min="2">
+        <div data-car-form="1" data-min="1">
             {% if current_user.is_authenticated %}
             <div class="card saved-import" style="margin:10px 0;">
                 <div class="small"><b>Chọn từ “Xe của tôi”</b> — lấy xe đã lưu để đưa vào form (có thể chỉnh sửa, không
@@ -251,7 +260,7 @@
                 </div>
                 {% endfor %}
                 {% else %}
-                {% for i in range(0, 2) %}
+                {% for i in range(0, 1) %}
                 <div class="card car-card" data-prefix="car" data-index="{{ i }}" style="margin:12px 0;">
                     <div class="actions">
                         <b class="car-title">Xe #{{ i+1 }}</b>
@@ -734,6 +743,44 @@
         font-weight: 600;
     }
 
+    .criterion-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .criterion-tab-btn {
+        border: 1px solid var(--border);
+        background: #0b1220;
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 12px;
+        cursor: pointer;
+        font-size: .92rem;
+        transition: all .2s ease;
+    }
+
+    .criterion-tab-btn:hover {
+        color: var(--text);
+        border-color: var(--blue);
+    }
+
+    .criterion-tab-btn.active {
+        background: var(--blue);
+        color: #fff;
+        border-color: var(--blue);
+    }
+
+    .criterion-pane {
+        display: none;
+        margin: 10px 0 14px;
+    }
+
+    .criterion-pane.active {
+        display: block;
+    }
+
     .ahp-alt-table td:nth-child(n+2),
     .ahp-alt-table th:nth-child(n+2) {
         text-align: center;
@@ -798,6 +845,38 @@
                 });
             });
         });
+    })();
+</script>
+
+<script>
+    (function () {
+        var wrap = document.getElementById('option-score-matrix-wrap');
+        if (!wrap) return;
+
+        var buttons = wrap.querySelectorAll('.criterion-tab-btn');
+        var panes = wrap.querySelectorAll('.criterion-pane');
+        if (!buttons.length || !panes.length) return;
+
+        function activate(tabId) {
+            buttons.forEach(function (btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-criterion-tab') === tabId);
+            });
+            panes.forEach(function (pane) {
+                pane.classList.toggle('active', pane.id === tabId);
+            });
+        }
+
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tabId = btn.getAttribute('data-criterion-tab');
+                if (!tabId) return;
+                activate(tabId);
+            });
+        });
+
+        var firstActive = wrap.querySelector('.criterion-tab-btn.active');
+        var initialTabId = firstActive ? firstActive.getAttribute('data-criterion-tab') : buttons[0].getAttribute('data-criterion-tab');
+        if (initialTabId) activate(initialTabId);
     })();
 </script>
 
