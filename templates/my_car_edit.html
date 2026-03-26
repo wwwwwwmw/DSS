@@ -28,6 +28,10 @@
         <div data-car-form="1" data-min="1">
             <div class="car-list">
                 <div class="card car-card" data-prefix="car" data-index="0" style="margin:12px 0;">
+                    {% set accidents_val = (car.accidents_or_damage|string)|trim|lower %}
+                    {% set owner_val = (car.one_owner|string)|trim|lower %}
+                    {% set driver_val = (car.driver_rating|string)|trim %}
+                    {% set seller_val = (car.seller_rating|string)|trim %}
                     <div class="actions">
                         <b class="car-title">Xe</b>
                         <span class="small">(chỉ sửa 1 xe)</span>
@@ -43,17 +47,21 @@
                         <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
                             <select name="car0_accidents_or_damage">
                                 <option value="">-- Chọn --</option>
-                                <option value="0" {% if car.accidents_or_damage=='0' %}selected{% endif %}>0 - Không
+                                <option value="0" {% if accidents_val in ['0', '0.0' , 'false' , 'f' , 'no' , 'n' ]
+                                    %}selected{% endif %}>0 - Không
                                 </option>
-                                <option value="1" {% if car.accidents_or_damage=='1' %}selected{% endif %}>1 - Có
+                                <option value="1" {% if accidents_val in ['1', '1.0' , 'true' , 't' , 'yes' , 'y' ]
+                                    %}selected{% endif %}>1 - Có
                                 </option>
                             </select>
                         </div>
                         <div class="col-3"><label>Một chủ duy nhất*</label>
                             <select name="car0_one_owner">
                                 <option value="">-- Chọn --</option>
-                                <option value="0" {% if car.one_owner=='0' %}selected{% endif %}>0 - Nhiều chủ</option>
-                                <option value="1" {% if car.one_owner=='1' %}selected{% endif %}>1 - Một chủ</option>
+                                <option value="0" {% if owner_val in ['0', '0.0' , 'false' , 'f' , 'no' , 'n' ]
+                                    %}selected{% endif %}>0 - Nhiều chủ</option>
+                                <option value="1" {% if owner_val in ['1', '1.0' , 'true' , 't' , 'yes' , 'y' ]
+                                    %}selected{% endif %}>1 - Một chủ</option>
                             </select>
                         </div>
                         <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car0_mpg"
@@ -62,7 +70,8 @@
                             <select name="car0_driver_rating">
                                 <option value="">-- Chọn --</option>
                                 {% for r in range(6) %}
-                                <option value="{{r}}" {% if car.driver_rating==r|string %}selected{% endif %}>{{r}}
+                                <option value="{{r}}" {% if driver_val in [r|string, (r|string) ~ '.0' ] %}selected{%
+                                    endif %}>{{r}}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -71,7 +80,8 @@
                             <select name="car0_seller_rating">
                                 <option value="">-- Chọn --</option>
                                 {% for r in range(6) %}
-                                <option value="{{r}}" {% if car.seller_rating==r|string %}selected{% endif %}>{{r}}
+                                <option value="{{r}}" {% if seller_val in [r|string, (r|string) ~ '.0' ] %}selected{%
+                                    endif %}>{{r}}
                                 </option>
                                 {% endfor %}
                             </select>
