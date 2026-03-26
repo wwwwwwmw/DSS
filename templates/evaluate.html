@@ -68,8 +68,8 @@
                     <div style="min-width:200px;">
                         <h4 style="margin:0 0 8px; color:var(--text); font-size:1.1rem;">Trạng thái</h4>
                         <div id="cr-display" style="font-weight:600; margin-bottom:8px; font-size:1.1rem;">CR: —</div>
-                        <div class="small" style="margin:6px 0;">CR &lt; 0.1: ma trận nhất quán ✅</div>
-                        <div class="small" style="margin:6px 0;">CR ≥ 0.1: cần điều chỉnh lại ❌</div>
+                        <div class="small" style="margin:6px 0;">CR &lt; 0.1: ma trận nhất quán </div>
+                        <div class="small" style="margin:6px 0;">CR ≥ 0.1: cần điều chỉnh lại </div>
                         <div class="small" style="margin:6px 0; opacity:.7;">Đường chéo chính luôn = 1</div>
                         <button class="btn secondary" type="button" id="btn-reset-matrix"
                             style="margin-top:10px; width:100%;">Reset về mặc định</button>
@@ -146,14 +146,14 @@
                                 <tr>
                                     <th>{{ t.option_labels[i] }}</th>
                                     {% for j in range(t.option_labels|length) %}
-                                    <td>{{ '%.3f'|format(t.matrix[i][j]) }}</td>
+                                    <td>{{ '%.2f'|format(t.matrix[i][j]) }}</td>
                                     {% endfor %}
                                 </tr>
                                 {% endfor %}
                                 <tr class="sum-row">
                                     <th>Tổng</th>
                                     {% for s in t.col_sums %}
-                                    <td>{{ '%.3f'|format(s) }}</td>
+                                    <td>{{ '%.2f'|format(s) }}</td>
                                     {% endfor %}
                                 </tr>
                             </tbody>
@@ -371,9 +371,9 @@
         </div>
 
         <button class="btn" type="submit" id="btn-submit-ranking"
-            style="background:var(--green);border-color:var(--green);font-size:1rem;">🔄 Chạy xếp
+            style="background:var(--green);border-color:var(--green);font-size:1rem;"> Chạy xếp
             hạng</button>
-        <span id="cr-block-msg" style="display:none; color:var(--red); margin-left:12px; font-weight:600;">⚠ Ma trận
+        <span id="cr-block-msg" style="display:none; color:var(--red); margin-left:12px; font-weight:600;"> Ma trận
             chưa nhất quán (CR ≥ 0.1). Hãy điều chỉnh lại trước khi chạy.</span>
     </form>
 </div>
@@ -426,17 +426,17 @@
                 </span>
             </div>
 
-            {# --- Pros (✅) --- #}
+            {# --- Pros --- #}
             {% if r.explanation.pros %}
             {% for p in r.explanation.pros %}
-            <div style="margin:3px 0;">✅ {{ p }}</div>
+            <div style="margin:3px 0;"> {{ p }}</div>
             {% endfor %}
             {% endif %}
 
-            {# --- Cons (⚠️) --- #}
+            {# --- Cons --- #}
             {% if r.explanation.cons %}
             {% for c in r.explanation.cons %}
-            <div style="margin:3px 0;">⚠️ {{ c }}</div>
+            <div style="margin:3px 0;"> {{ c }}</div>
             {% endfor %}
             {% endif %}
 
@@ -505,9 +505,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
     (function () {
-        /* Dark theme defaults */
-        Chart.defaults.color = '#9fb0cc';
-        Chart.defaults.borderColor = '#22304a';
+        /* Light theme defaults */
+        Chart.defaults.color = '#475569';
+        Chart.defaults.borderColor = '#d6e0ea';
 
         const DATA = {{ chart_data | tojson
     }};
@@ -519,7 +519,7 @@
     const details = DATA.ahp_details;
     const scores = DATA.scores;
 
-    // Dark-theme palette
+    // Accent palette for charts
     const COLORS = [
         '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
         '#ec4899', '#06b6d4', '#f97316', '#6366f1'
@@ -550,8 +550,8 @@
             options: {
                 indexAxis: 'y',
                 scales: {
-                    x: { beginAtZero: true, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc' }, title: { display: true, text: 'Điểm AHP', color: '#9fb0cc' } },
-                    y: { grid: { display: false }, ticks: { color: '#e9f0ff', font: { weight: '600' } } }
+                    x: { beginAtZero: true, grid: { color: '#d6e0ea' }, ticks: { color: '#475569' }, title: { display: true, text: 'Điểm AHP', color: '#475569' } },
+                    y: { grid: { display: false }, ticks: { color: '#0f172a', font: { weight: '600' } } }
                 },
                 plugins: {
                     legend: { display: false },
@@ -584,8 +584,8 @@
             options: {
                 indexAxis: 'y',
                 scales: {
-                    x: { beginAtZero: true, max: 100, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc', callback: v => v + '%' }, title: { display: true, text: 'Tỷ lệ %', color: '#9fb0cc' } },
-                    y: { grid: { display: false }, ticks: { color: '#e9f0ff', font: { size: 11 } } }
+                    x: { beginAtZero: true, max: 100, grid: { color: '#d6e0ea' }, ticks: { color: '#475569', callback: v => v + '%' }, title: { display: true, text: 'Tỷ lệ %', color: '#475569' } },
+                    y: { grid: { display: false }, ticks: { color: '#0f172a', font: { size: 16 } } }
                 },
                 plugins: {
                     legend: { display: false },
@@ -615,8 +615,8 @@
             data: { labels: carLabels, datasets: datasets },
             options: {
                 scales: {
-                    x: { stacked: true, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc' } },
-                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Điểm AHP', color: '#9fb0cc' }, grid: { color: '#22304a' }, ticks: { color: '#9fb0cc' } }
+                    x: { stacked: true, grid: { color: '#d6e0ea' }, ticks: { color: '#475569' } },
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Điểm AHP', color: '#475569' }, grid: { color: '#d6e0ea' }, ticks: { color: '#475569' } }
                 },
                 plugins: {
                     tooltip: {
@@ -626,7 +626,7 @@
                             }
                         }
                     },
-                    legend: { labels: { color: '#e9f0ff' } }
+                    legend: { labels: { color: '#0f172a' } }
                 }
             }
         });
@@ -652,7 +652,7 @@
     }
 
     .ahp-scale-table th {
-        background: rgba(18, 26, 43, .95);
+        background: var(--surface-alt);
         color: var(--muted);
         font-weight: 600;
     }
@@ -679,7 +679,7 @@
     }
 
     #pairwise-matrix th {
-        background: rgba(18, 26, 43, .95);
+        background: var(--surface-alt);
         font-weight: 600;
         color: var(--muted);
     }
@@ -699,7 +699,7 @@
         padding: 5px 8px;
         border-radius: 6px;
         border: 1px solid var(--border);
-        background: #0b1220;
+        background: #fff;
         color: var(--text);
         text-align: center;
         font-size: 1rem;
@@ -740,12 +740,12 @@
 
     .criterion-tab-btn {
         border: 1px solid var(--border);
-        background: #0b1220;
+        background: var(--surface-alt);
         color: var(--muted);
         border-radius: 999px;
         padding: 7px 12px;
         cursor: pointer;
-        font-size: .92rem;
+        font-size: 1.1rem;
         transition: all .2s ease;
     }
 
@@ -800,7 +800,7 @@
         border: none;
         color: var(--muted);
         cursor: pointer;
-        font-size: 1rem;
+        font-size: 1.2rem;
         white-space: nowrap;
         border-bottom: 2px solid transparent;
         transition: color .2s, border-color .2s;
@@ -899,9 +899,9 @@
     }
 
     function fmtVal(v) {
-        if (!Number.isFinite(v)) return '1.000000';
-        if (Math.abs(v - 1) < 1e-9) return '1.000000';
-        return Number(v).toFixed(6);
+        if (!Number.isFinite(v)) return '1.00';
+        if (Math.abs(v - 1) < 1e-9) return '1.00';
+        return Number(v).toFixed(2);
     }
 
     function hasValidShape(m) {
@@ -1022,7 +1022,7 @@
             html += '<tr><th>' + labels[i] + '</th>';
             for (let j = 0; j < n; j++) {
                 if (i === j) {
-                    html += '<td class="diag">1.000000</td>';
+                    html += '<td class="diag">1.00</td>';
                 } else if (j > i) {
                     html += '<td><input type="number" step="any" min="0.111111" max="9" data-row="' + i + '" data-col="' + j + '" value="' + fmtVal(matrix[i][j]) + '" /></td>';
                 } else {

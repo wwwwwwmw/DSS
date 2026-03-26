@@ -1,82 +1,543 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="card">
-    <h2>Admin</h2>
-    <div class="small">Quản lý user, tiêu chí, và retrain từ file CSV.</div>
+    <h2>Admin Dashboard</h2>
+    <div class="small">Quản lý mô hình AI, ma trận AHP, người dùng và dữ liệu hệ thống trên cùng một màn hình.</div>
 </div>
 
 <div class="card">
-    <h3>Retrain AI</h3>
-    <form method="post" action="{{ url_for('admin_retrain') }}" enctype="multipart/form-data">
-        <div class="grid">
-            <div class="col-6">
-                <label>Upload cars.csv mới (tuỳ chọn)</label>
-                <input type="file" name="csv_file" accept=".csv" />
-            </div>
-            <div class="col-6">
-                <label>Ghi chú</label>
-                <input type="text" name="note" placeholder="vd: cập nhật dữ liệu tháng 1" />
-            </div>
-            <div class="col-12"><button class="btn" type="submit">Retrain</button></div>
-        </div>
-    </form>
-</div>
+    <div class="admin-tabs">
+        <button class="admin-tab active" type="button" data-admin-tab="tab-ahp">AHP & Retrain</button>
+        <button class="admin-tab" type="button" data-admin-tab="tab-model">Model Metrics</button>
+        <button class="admin-tab" type="button" data-admin-tab="tab-usage">User & History</button>
+        <button class="admin-tab" type="button" data-admin-tab="tab-logs">Logs & Data</button>
+    </div>
 
-<div class="card">
-    <h3>Tiêu chí & trọng số mặc định</h3>
-    <form method="post" action="{{ url_for('admin_update_criteria') }}">
-        <div class="small">
-            Nhập <b>ma trận so sánh cặp (AHP Saaty)</b> kích thước n×n theo đúng thứ tự tiêu chí bên dưới.
-            Giá trị là số &gt; 0 (có thể dùng phân số như <code>1/3</code>). Đường chéo chính = 1.
-        </div>
+    <div id="tab-ahp" class="admin-pane active">
+        <h3>Cập nhật trọng số mặc định bằng AHP</h3>
+        <div class="small">Sử dụng grid so sánh cặp chuẩn Saaty để giảm lỗi nhập liệu. Đường chéo luôn bằng 1 và ô đối
+            xứng tự nghịch đảo.</div>
 
-        <div style="margin-top:10px">
-            <label>Thứ tự tiêu chí (n={{ criteria|length }})</label>
-            <div class="small">
+        <form method="post" action="{{ url_for('admin_update_criteria') }}" id="admin-ahp-form">
+            <input type="hidden" name="pairwise_matrix_json" id="admin_pairwise_matrix_json" />
+            <textarea name="pairwise_matrix" style="display:none"></textarea>
+
+            <div class="small" style="margin-top:10px;">
+                <b>Thứ tự tiêu chí:</b>
                 {% for c in criteria %}
                 {{ loop.index }}. {{ c.key }}{% if not loop.last %} • {% endif %}
                 {% endfor %}
             </div>
+
+            <div style="overflow-x:auto; margin-top:12px;">
+                <table class="table" id="admin-ahp-grid"></table>
+            </div>
+
+            <div class="actions" style="margin-top:12px;">
+                <div class="small" id="admin-ahp-cr">CR: -</div>
+                <div>
+                    <button class="btn secondary" type="button" id="admin-reset-ahp">Reset</button>
+                    <button class="btn" type="submit" id="admin-save-ahp">Lưu trọng số AHP</button>
+                </div>
+            </div>
+        </form>
+
+        <h3 style="margin-top:18px;">Retrain AI</h3>
+        <form method="post" action="{{ url_for('admin_retrain') }}" enctype="multipart/form-data">
+            <div class="grid">
+                <div class="col-6">
+                    <label>Upload cars.csv mới (tuỳ chọn)</label>
+                    <input type="file" name="csv_file" accept=".csv" />
+                </div>
+                <div class="col-6">
+                    <label>Ghi chú</label>
+                    <input type="text" name="note" placeholder="vd: cập nhật dữ liệu tháng 1" />
+                </div>
+                <div class="col-12"><button class="btn" type="submit">Retrain</button></div>
+            </div>
+        </form>
+    </div>
+
+    <div id="tab-model" class="admin-pane">
+        <h3>Model Metrics</h3>
+        {% if model_metrics.available %}
+        <div class="grid">
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Lần retrain gần nhất</div><b>{{ model_metrics.trained_at or 'N/A' }}</b>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Số dòng train</div><b>{{ model_metrics.train_rows if model_metrics.train_rows is
+                        not none else 'N/A' }}</b>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Accuracy</div><b>{{ ('%.2f'|format(model_metrics.accident_accuracy * 100) ~ '%')
+                        if model_metrics.accident_accuracy is not none else 'N/A' }}</b>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">MAE bảo trì</div><b>{{ ('%.2f'|format(model_metrics.maintenance_mae)) if
+                        model_metrics.maintenance_mae is not none else 'N/A' }}</b>
+                </div>
+            </div>
+        </div>
+        <div class="small" style="margin-top:8px;">Nguồn dữ liệu: {{ model_metrics.cars_csv or 'N/A' }}</div>
+        <div class="small">Ghi chú model: {{ model_metrics.note or 'N/A' }}</div>
+
+        <div class="card" style="margin-top:12px;">
+            <h4 style="margin:0 0 10px;">Feature Importance (Classifier)</h4>
+            <canvas id="featureImportanceChart" height="180"></canvas>
+        </div>
+        {% else %}
+        <div class="flash danger">Chưa có model. Vui lòng retrain để xem metrics.</div>
+        {% endif %}
+    </div>
+
+    <div id="tab-usage" class="admin-pane">
+        <h3>Thống kê người dùng & lịch sử</h3>
+        <div class="grid">
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Tổng user</div><b>{{ usage_stats.user_count }}</b>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Tổng lượt lịch sử</div><b>{{ usage_stats.history_count }}</b>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Xe đã lưu</div><b>{{ usage_stats.saved_car_count }}</b>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="metric-box">
+                    <div class="small">Tỷ lệ nên mua</div><b>{{ '%.1f'|format(usage_stats.green_rate) }}%</b>
+                </div>
+            </div>
         </div>
 
-        <div style="margin-top:10px">
-            <label>Ma trận AHP (mỗi dòng 1 hàng, cách nhau bởi dấu cách hoặc dấu phẩy)</label>
-            <textarea name="pairwise_matrix" rows="10" style="width:100%" placeholder="vd (3 tiêu chí):
-1, 3, 5
-1/3, 1, 2
-1/5, 1/2, 1"></textarea>
-            <div class="hint">Nếu CR &ge; 0.1 hệ thống sẽ báo không hợp lệ.</div>
+        <div class="grid" style="margin-top:8px;">
+            <div class="col-6">
+                <div class="card" style="margin:0;">
+                    <h4 style="margin:0 0 10px;">Phân bổ kết quả tư vấn</h4>
+                    <canvas id="badgeRatioChart" height="180"></canvas>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card" style="margin:0;">
+                    <h4 style="margin:0 0 10px;">Lượt sử dụng 14 ngày gần đây</h4>
+                    <canvas id="dailyUsageChart" height="180"></canvas>
+                </div>
+            </div>
         </div>
 
-        <button class="btn" type="submit">Tính & lưu trọng số (AHP)</button>
-    </form>
-</div>
+        <div class="card" style="margin-top:12px;">
+            <h4 style="margin:0 0 10px;">Danh sách người dùng</h4>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.email }}</td>
+                        <td>{{ u.role }}</td>
+                        <td>
+                            {% if u.role != 'admin' %}
+                            <form method="post" action="{{ url_for('admin_make_admin', user_id=u.id) }}"
+                                style="display:inline">
+                                <button class="btn secondary" type="submit">Set admin</button>
+                            </form>
+                            {% else %}
+                            <span class="badge info">Admin</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-<div class="card">
-    <h3>Người dùng</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Hành động</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for u in users %}
-            <tr>
-                <td>{{ u.email }}</td>
-                <td>{{ u.role }}</td>
-                <td>
-                    {% if u.role != 'admin' %}
-                    <form method="post" action="{{ url_for('admin_make_admin', user_id=u.id) }}" style="display:inline">
-                        <button class="btn secondary" type="submit">Set admin</button>
-                    </form>
+    <div id="tab-logs" class="admin-pane">
+        <h3>Báo cáo logs & dữ liệu CSV</h3>
+
+        <div class="card" style="margin:0 0 12px;">
+            <h4 style="margin:0 0 8px;">cars.csv hiện hành</h4>
+            {% if file_reports.default_csv %}
+            <div class="small">File: {{ file_reports.default_csv.path }}</div>
+            <div class="small">Dung lượng: {{ file_reports.default_csv.size_kb }} KB | Số dòng: {{
+                file_reports.default_csv.rows if file_reports.default_csv.rows is not none else 'N/A' }}</div>
+            {% else %}
+            <div class="small">Không tìm thấy file cars.csv cấu hình hiện tại.</div>
+            {% endif %}
+        </div>
+
+        <div class="grid">
+            <div class="col-6">
+                <div class="card" style="margin:0;">
+                    <h4 style="margin:0 0 8px;">CSV đã upload trong data/</h4>
+                    {% if file_reports.csv_files %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Tên file</th>
+                                <th>Rows</th>
+                                <th>KB</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in file_reports.csv_files %}
+                            <tr>
+                                <td>{{ f.name }}</td>
+                                <td>{{ f.rows if f.rows is not none else 'N/A' }}</td>
+                                <td>{{ f.size_kb }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="small">Chưa có file CSV upload trong thư mục data/.</div>
                     {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                </div>
+            </div>
+
+            <div class="col-6">
+                <div class="card" style="margin:0;">
+                    <h4 style="margin:0 0 8px;">Nội dung log gần nhất</h4>
+                    {% if file_reports.log_files %}
+                    <div class="small">File: {{ file_reports.log_files[0].name }} ({{ file_reports.log_files[0].size_kb
+                        }} KB)</div>
+                    <pre class="admin-log-view">{{ file_reports.latest_log_text or 'Log trống.' }}</pre>
+                    {% else %}
+                    <div class="small">Chưa có file log trong thư mục logs/.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<style>
+    .admin-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .admin-tab {
+        border: 1px solid var(--border);
+        background: var(--surface-alt);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+
+    .admin-tab.active {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+    }
+
+    .admin-pane {
+        display: none;
+    }
+
+    .admin-pane.active {
+        display: block;
+    }
+
+    .metric-box {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        background: #fff;
+        min-height: 110px;
+    }
+
+    .admin-ahp-select {
+        width: 100%;
+        min-width: 82px;
+        text-align: center;
+    }
+
+    .admin-ahp-fixed {
+        text-align: center;
+        font-weight: 700;
+    }
+
+    .admin-ahp-recip {
+        text-align: center;
+        color: var(--muted);
+    }
+
+    .admin-log-view {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        max-height: 420px;
+        overflow: auto;
+        font-size: 14px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function () {
+        var tabButtons = document.querySelectorAll('.admin-tab');
+        var panes = document.querySelectorAll('.admin-pane');
+        tabButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var tabId = btn.getAttribute('data-admin-tab');
+                tabButtons.forEach(function (b) { b.classList.remove('active'); });
+                panes.forEach(function (p) { p.classList.remove('active'); });
+                btn.classList.add('active');
+                var pane = document.getElementById(tabId);
+                if (pane) pane.classList.add('active');
+            });
+        });
+    })();
+
+    (function () {
+        var labels = {{ criteria | map(attribute = 'key') | list | tojson
+    }};
+    var n = labels.length;
+    var rawDefaults = {{ criteria | map(attribute = 'default_weight') | list | tojson }};
+    var RI = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49];
+
+    var SAATY_OPTIONS = [
+        { label: '1/9', value: 1 / 9 },
+        { label: '1/8', value: 1 / 8 },
+        { label: '1/7', value: 1 / 7 },
+        { label: '1/6', value: 1 / 6 },
+        { label: '1/5', value: 1 / 5 },
+        { label: '1/4', value: 1 / 4 },
+        { label: '1/3', value: 1 / 3 },
+        { label: '1/2', value: 1 / 2 },
+        { label: '1', value: 1 },
+        { label: '2', value: 2 },
+        { label: '3', value: 3 },
+        { label: '4', value: 4 },
+        { label: '5', value: 5 },
+        { label: '6', value: 6 },
+        { label: '7', value: 7 },
+        { label: '8', value: 8 },
+        { label: '9', value: 9 },
+    ];
+
+    function closestSaaty(v) {
+        var best = SAATY_OPTIONS[8];
+        var bestDiff = Number.POSITIVE_INFINITY;
+        SAATY_OPTIONS.forEach(function (opt) {
+            var d = Math.abs(opt.value - v);
+            if (d < bestDiff) {
+                bestDiff = d;
+                best = opt;
+            }
+        });
+        return best.value;
+    }
+
+    function matrixFromDefaults() {
+        var ws = rawDefaults.map(function (x) {
+            var v = Number(x);
+            return Number.isFinite(v) && v > 0 ? v : 1;
+        });
+        var m = [];
+        for (var i = 0; i < n; i++) {
+            m[i] = [];
+            for (var j = 0; j < n; j++) {
+                m[i][j] = i === j ? 1 : closestSaaty(ws[i] / ws[j]);
+            }
+        }
+        return m;
+    }
+
+    var matrix = matrixFromDefaults();
+
+    function fmt2(v) {
+        return Number(v).toFixed(2);
+    }
+
+    function matrixToWeights(m) {
+        var gm = [];
+        for (var i = 0; i < n; i++) {
+            var prod = 1;
+            for (var j = 0; j < n; j++) prod *= m[i][j];
+            gm[i] = Math.pow(prod, 1 / n);
+        }
+        var sum = gm.reduce(function (a, b) { return a + b; }, 0);
+        return gm.map(function (x) { return x / sum; });
+    }
+
+    function computeCR(m, w) {
+        var lambdaMax = 0;
+        for (var i = 0; i < n; i++) {
+            var rowDot = 0;
+            for (var j = 0; j < n; j++) rowDot += m[i][j] * w[j];
+            lambdaMax += rowDot / w[i];
+        }
+        lambdaMax /= n;
+        var ci = (lambdaMax - n) / (n - 1);
+        var ri = n < RI.length ? RI[n] : 1.49;
+        return ri > 0 ? ci / ri : 0;
+    }
+
+    function renderGrid() {
+        var tbl = document.getElementById('admin-ahp-grid');
+        if (!tbl) return;
+
+        var html = '<thead><tr><th></th>';
+        for (var j = 0; j < n; j++) html += '<th>' + labels[j] + '</th>';
+        html += '</tr></thead><tbody>';
+
+        for (var i = 0; i < n; i++) {
+            html += '<tr><th>' + labels[i] + '</th>';
+            for (var j = 0; j < n; j++) {
+                if (i === j) {
+                    html += '<td class="admin-ahp-fixed">1.00</td>';
+                } else if (j > i) {
+                    html += '<td><select class="admin-ahp-select" data-i="' + i + '" data-j="' + j + '">';
+                    SAATY_OPTIONS.forEach(function (opt) {
+                        var selected = Math.abs(opt.value - matrix[i][j]) < 1e-9 ? ' selected' : '';
+                        html += '<option value="' + opt.value + '"' + selected + '>' + opt.label + '</option>';
+                    });
+                    html += '</select></td>';
+                } else {
+                    html += '<td class="admin-ahp-recip" id="admin-cell-' + i + '-' + j + '">' + fmt2(matrix[i][j]) + '</td>';
+                }
+            }
+            html += '</tr>';
+        }
+        html += '</tbody>';
+        tbl.innerHTML = html;
+
+        tbl.querySelectorAll('.admin-ahp-select').forEach(function (sel) {
+            sel.addEventListener('change', function () {
+                var i = Number(sel.getAttribute('data-i'));
+                var j = Number(sel.getAttribute('data-j'));
+                var v = Number(sel.value);
+                matrix[i][j] = v;
+                matrix[j][i] = 1 / v;
+                var recip = document.getElementById('admin-cell-' + j + '-' + i);
+                if (recip) recip.textContent = fmt2(matrix[j][i]);
+                updateCR();
+            });
+        });
+
+        updateCR();
+    }
+
+    function updateCR() {
+        var w = matrixToWeights(matrix);
+        var cr = computeCR(matrix, w);
+        var el = document.getElementById('admin-ahp-cr');
+        var ok = cr < 0.1;
+        if (el) {
+            el.innerHTML = 'CR: ' + cr.toFixed(4) + ' ' + (ok
+                ? '<span style="color:var(--green);">(đạt)</span>'
+                : '<span style="color:var(--red);">(chưa đạt)</span>');
+        }
+        var saveBtn = document.getElementById('admin-save-ahp');
+        if (saveBtn) saveBtn.disabled = !ok;
+
+        var hidden = document.getElementById('admin_pairwise_matrix_json');
+        if (hidden) hidden.value = JSON.stringify(matrix);
+    }
+
+    var resetBtn = document.getElementById('admin-reset-ahp');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            matrix = matrixFromDefaults();
+            renderGrid();
+        });
+    }
+
+    renderGrid();
+    }) ();
+
+    (function () {
+        if (typeof Chart === 'undefined') return;
+
+        var fi = {{ model_metrics.feature_importance | tojson
+    }};
+    var fiCanvas = document.getElementById('featureImportanceChart');
+    if (fiCanvas && fi && fi.length) {
+        new Chart(fiCanvas, {
+            type: 'bar',
+            data: {
+                labels: fi.map(function (x) { return x.name; }),
+                datasets: [{
+                    label: 'Importance',
+                    data: fi.map(function (x) { return x.value; }),
+                    backgroundColor: '#3b82f6',
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true },
+                    y: { ticks: { autoSkip: false } }
+                }
+            }
+        });
+    }
+
+    var badgeCanvas = document.getElementById('badgeRatioChart');
+    var badgeData = {{ usage_stats.badge_counts | tojson }};
+    if (badgeCanvas) {
+        new Chart(badgeCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Nên mua', 'Cân nhắc', 'Không nên mua'],
+                datasets: [{
+                    data: [badgeData.green || 0, badgeData.yellow || 0, badgeData.red || 0],
+                    backgroundColor: ['#16a34a', '#eab308', '#ef4444'],
+                }]
+            },
+            options: { plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    var dailyCanvas = document.getElementById('dailyUsageChart');
+    if (dailyCanvas) {
+        new Chart(dailyCanvas, {
+            type: 'line',
+            data: {
+                labels: {{ usage_stats.daily_labels | tojson }},
+    datasets: [{
+        label: 'Số lượt',
+        data: {{ usage_stats.daily_values | tojson }},
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+        fill: true,
+        tension: 0.25,
+                    }]
+                },
+    options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+            });
+        }
+    }) ();
+</script>
 {% endblock %}

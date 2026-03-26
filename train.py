@@ -14,6 +14,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score, mean_absolute_error
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -229,7 +230,9 @@ def train(
             _print_progress("accident_clf", done, n_estimators_clf, clf_started)
 
         yA_pred = accident_clf.predict(X_test_np)
+        accident_accuracy = float(accuracy_score(yA_test, yA_pred))
         logger.info("=== Accident classifier report ===\n%s", classification_report(yA_test, yA_pred, digits=3))
+        logger.info("Accident accuracy: %.4f", accident_accuracy)
 
         logger.info("Training RandomForestRegressor...")
         reg_started = time.perf_counter()
@@ -248,6 +251,23 @@ def train(
             maint_reg.set_params(n_estimators=done)
             maint_reg.fit(X_train_np, yM_train)
             _print_progress("maint_reg", done, n_estimators_reg, reg_started)
+
+        yM_pred = maint_reg.predict(X_test_np)
+        maintenance_mae = float(mean_absolute_error(yM_test, yM_pred))
+        logger.info("Maintenance MAE: %.4f", maintenance_mae)
+
+        fi_raw = getattr(accident_clf, "feature_importances_", None)
+        if fi_raw is None:
+            fi_raw = []
+
+        feature_importance = []
+        for i, val in enumerate(fi_raw):
+            feature_importance.append(
+                {
+                    "name": feature_cols[i] if i < len(feature_cols) else f"feature_{i + 1}",
+                    "value": float(val),
+                }
+            )
 
         pkg = {
             "preprocessor": preprocessor,
@@ -269,6 +289,10 @@ def train(
                     else None
                 ),
                 "log_file": str(log_file),
+                "train_rows": int(len(df)),
+                "accident_accuracy": accident_accuracy,
+                "maintenance_mae": maintenance_mae,
+                "feature_importance": feature_importance,
             },
         }
 

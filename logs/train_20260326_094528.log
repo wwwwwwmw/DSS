@@ -1,0 +1,23 @@
+2026-03-26 16:45:28,588 | INFO | Reading CSV: ./cars.csv
+2026-03-26 16:45:29,372 | INFO | Loaded rows: 762091
+2026-03-26 16:45:30,296 | INFO | Training RandomForestClassifier...
+2026-03-26 16:45:51,254 | INFO | === Accident classifier report ===
+              precision    recall  f1-score   support
+
+           0      0.810     0.909     0.857    118681
+           1      0.439     0.250     0.319     33738
+
+    accuracy                          0.763    152419
+   macro avg      0.625     0.580     0.588    152419
+weighted avg      0.728     0.763     0.738    152419
+
+2026-03-26 16:45:51,254 | INFO | Accident accuracy: 0.7633
+2026-03-26 16:45:51,255 | INFO | Training RandomForestRegressor...
+2026-03-26 16:46:30,937 | INFO | Maintenance MAE: 14.9601
+2026-03-26 16:46:31,147 | ERROR | Training failed: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+2026-03-26 16:46:31,155 | ERROR | Traceback (most recent call last):
+  File "D:\Documents\DSS\train.py", line 260, in train
+    for i, val in enumerate(getattr(accident_clf, "feature_importances_", []) or []):
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+

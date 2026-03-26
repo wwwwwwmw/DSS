@@ -1,25 +1,30 @@
 :root {
-    --bg: #0b1220;
-    --card: #121a2b;
-    --muted: #9fb0cc;
-    --text: #e9f0ff;
+    --bg: #f6f9fc;
+    --card: #ffffff;
+    --muted: #475569;
+    --text: #0f172a;
     --green: #16a34a;
     --yellow: #eab308;
     --red: #ef4444;
     --blue: #3b82f6;
-    --border: #22304a
+    --border: #d6e0ea;
+    --surface-alt: #eef3f8
 }
 
 * {
     box-sizing: border-box
 }
 
+html {
+    font-size: 150%
+}
+
 body {
     margin: 0;
     font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    background: linear-gradient(180deg, #070b14, #0b1220);
+    background: linear-gradient(180deg, #f8fbff, #eef4fa);
     color: var(--text);
-    font-size: 20px
+    font-size: 1rem
 }
 
 .container {
@@ -43,7 +48,7 @@ body {
 .nav a {
     color: var(--muted);
     text-decoration: none;
-    margin-left: 12px
+    margin-left: 18px
 }
 
 .nav a:hover {
@@ -51,11 +56,11 @@ body {
 }
 
 .card {
-    background: rgba(18, 26, 43, .9);
+    background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 20px;
-    margin: 16px 0
+    padding: 28px;
+    margin: 20px 0
 }
 
 .grid {
@@ -82,20 +87,20 @@ body {
 
 label {
     display: block;
-    font-size: 15px;
+    font-size: 22px;
     color: var(--muted);
-    margin-bottom: 6px
+    margin-bottom: 8px
 }
 
 input,
 select {
     width: 100%;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: #0b1220;
+    background: var(--surface-alt);
     color: var(--text);
-    font-size: 15px
+    font-size: 22px
 }
 
 .btn {
@@ -103,19 +108,21 @@ select {
     border: 1px solid var(--border);
     background: var(--blue);
     color: #fff;
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: 10px;
     text-decoration: none;
-    cursor: pointer
+    cursor: pointer;
+    font-size: 22px
 }
 
 .btn.secondary {
-    background: #0b1220
+    background: var(--surface-alt);
+    color: var(--text)
 }
 
 .btn.danger {
     background: rgba(239, 68, 68, .15);
-    color: #ffd0d0;
+    color: #490303;
     border-color: rgba(239, 68, 68, .4)
 }
 
@@ -128,64 +135,64 @@ select {
 
 .hint {
     color: var(--muted);
-    font-size: 15px;
+    font-size: 22px;
     margin-top: 6px
 }
 
 .badge {
     display: inline-block;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border-radius: 999px;
     border: 1px solid var(--border);
-    font-size: 15px
+    font-size: 20px
 }
 
 .badge.green {
-    background: rgba(22, 163, 74, .15);
+    background: rgba(22, 163, 74, .12);
     border-color: rgba(22, 163, 74, .4);
-    color: #c7f9d4
+    color: #166534
 }
 
 .badge.yellow {
-    background: rgba(234, 179, 8, .15);
+    background: rgba(234, 179, 8, .18);
     border-color: rgba(234, 179, 8, .4);
-    color: #fff1b3
+    color: #854d0e
 }
 
 .badge.red {
-    background: rgba(239, 68, 68, .15);
+    background: rgba(239, 68, 68, .14);
     border-color: rgba(239, 68, 68, .4);
-    color: #ffd0d0
+    color: #991b1b
 }
 
 .badge.danger-dark {
-    background: rgba(153, 27, 27, .25);
+    background: rgba(248, 113, 113, .18);
     border-color: rgba(239, 68, 68, .6);
-    color: #ffb0b0
+    color: #7f1d1d
 }
 
 .badge.success {
-    background: rgba(22, 163, 74, .15);
+    background: rgba(22, 163, 74, .12);
     border-color: rgba(22, 163, 74, .4);
-    color: #c7f9d4
+    color: #166534
 }
 
 .badge.info {
-    background: rgba(59, 130, 246, .15);
+    background: rgba(59, 130, 246, .12);
     border-color: rgba(59, 130, 246, .4);
-    color: #cfe4ff
+    color: #1e3a8a
 }
 
 .badge.warning {
-    background: rgba(234, 179, 8, .15);
+    background: rgba(234, 179, 8, .18);
     border-color: rgba(234, 179, 8, .4);
-    color: #fff1b3
+    color: #854d0e
 }
 
 .badge.danger {
-    background: rgba(239, 68, 68, .15);
+    background: rgba(239, 68, 68, .14);
     border-color: rgba(239, 68, 68, .4);
-    color: #ffd0d0
+    color: #991b1b
 }
 
 .table {
@@ -195,10 +202,10 @@ select {
 
 .table th,
 .table td {
-    padding: 12px;
+    padding: 14px;
     border-bottom: 1px solid var(--border);
     text-align: left;
-    font-size: 15px
+    font-size: 22px
 }
 
 .best {
@@ -227,7 +234,22 @@ select {
 
 .small {
     color: var(--muted);
-    font-size: 17px
+    font-size: 24px
+}
+
+.auth-card {
+    max-width: 760px;
+    margin: 32px auto;
+    border: 1px solid #cfe0f2;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, .08);
+}
+
+.auth-head {
+    margin-bottom: 14px;
+}
+
+.auth-form .btn {
+    width: 100%;
 }
 
 @media (max-width:900px) {

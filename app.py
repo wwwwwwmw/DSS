@@ -7,6 +7,7 @@ import subprocess
 import sys
 import re
 import math
+import csv
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -1534,6 +1535,214 @@ def create_app() -> Flask:
             return False
         return True
 
+    def _count_csv_rows(csv_file: str) -> Optional[int]:
+        try:
+            p = Path(csv_file)
+            if not p.exists() or not p.is_file():
+                return None
+            with p.open("r", encoding="utf-8", errors="ignore", newline="") as f:
+                row_count = sum(1 for _ in csv.reader(f))
+            return max(0, row_count - 1)
+        except Exception:
+            return None
+
+    def _build_model_metrics() -> Dict[str, Any]:
+        models = get_models()
+        if not models:
+            return {
+                "available": False,
+                "trained_at": None,
+                "train_rows": None,
+                "accident_accuracy": None,
+                "maintenance_mae": None,
+                "feature_importance": [],
+                "cars_csv": None,
+                "note": None,
+            }
+
+        meta = dict(models.meta or {})
+        feature_names = (
+            meta.get("feature_cols")
+            or meta.get("numeric_features")
+            or meta.get("features")
+            or []
+        )
+
+        fi_pairs: List[Dict[str, Any]] = []
+        raw_fi = meta.get("feature_importance")
+        if isinstance(raw_fi, list):
+            for it in raw_fi:
+                if not isinstance(it, dict):
+                    continue
+                name = str(it.get("name") or "").strip()
+                val = it.get("value")
+                try:
+                    fval = float(val)
+                except Exception:
+                    continue
+                if name:
+                    fi_pairs.append({"name": name, "value": fval})
+
+        if not fi_pairs:
+            try:
+                importances = list(getattr(models.accident_clf, "feature_importances_", []) or [])
+                for i, val in enumerate(importances):
+                    name = feature_names[i] if i < len(feature_names) else f"feature_{i + 1}"
+                    fi_pairs.append({"name": str(name), "value": float(val)})
+            except Exception:
+                fi_pairs = []
+
+        fi_pairs.sort(key=lambda x: x["value"], reverse=True)
+
+        train_rows = meta.get("train_rows")
+        if train_rows is not None:
+            try:
+                train_rows = int(train_rows)
+            except Exception:
+                train_rows = None
+
+        cars_csv = meta.get("cars_csv") or settings.cars_csv_path
+        if train_rows is None and cars_csv:
+            train_rows = _count_csv_rows(str(cars_csv))
+
+        def _f(v: Any) -> Optional[float]:
+            try:
+                fv = float(v)
+                return fv if math.isfinite(fv) else None
+            except Exception:
+                return None
+
+        return {
+            "available": True,
+            "trained_at": meta.get("trained_at"),
+            "train_rows": train_rows,
+            "accident_accuracy": _f(meta.get("accident_accuracy")),
+            "maintenance_mae": _f(meta.get("maintenance_mae")),
+            "feature_importance": fi_pairs[:12],
+            "cars_csv": str(cars_csv) if cars_csv else None,
+            "log_file": meta.get("log_file"),
+            "note": meta.get("note"),
+        }
+
+    def _build_admin_file_reports() -> Dict[str, Any]:
+        logs_dir = Path("./logs")
+        data_dir = Path("./data")
+
+        log_files = []
+        if logs_dir.exists():
+            for p in sorted(logs_dir.glob("*.log"), key=lambda x: x.stat().st_mtime, reverse=True):
+                st = p.stat()
+                log_files.append(
+                    {
+                        "name": p.name,
+                        "path": str(p),
+                        "size_kb": round(st.st_size / 1024.0, 1),
+                        "modified_at": dt.datetime.fromtimestamp(st.st_mtime),
+                    }
+                )
+
+        latest_log_text = ""
+        if log_files:
+            latest = Path(log_files[0]["path"])
+            try:
+                lines = latest.read_text(encoding="utf-8", errors="ignore").splitlines()
+                latest_log_text = "\n".join(lines[-80:])
+            except Exception:
+                latest_log_text = "Không đọc được nội dung file log gần nhất."
+
+        csv_files = []
+        if data_dir.exists():
+            for p in sorted(data_dir.glob("*.csv"), key=lambda x: x.stat().st_mtime, reverse=True):
+                st = p.stat()
+                csv_files.append(
+                    {
+                        "name": p.name,
+                        "path": str(p),
+                        "size_kb": round(st.st_size / 1024.0, 1),
+                        "rows": _count_csv_rows(str(p)),
+                        "modified_at": dt.datetime.fromtimestamp(st.st_mtime),
+                    }
+                )
+
+        default_csv = Path(settings.cars_csv_path)
+        default_csv_info = None
+        if default_csv.exists() and default_csv.is_file():
+            st = default_csv.stat()
+            default_csv_info = {
+                "name": default_csv.name,
+                "path": str(default_csv),
+                "size_kb": round(st.st_size / 1024.0, 1),
+                "rows": _count_csv_rows(str(default_csv)),
+                "modified_at": dt.datetime.fromtimestamp(st.st_mtime),
+            }
+
+        return {
+            "log_files": log_files,
+            "latest_log_text": latest_log_text,
+            "csv_files": csv_files,
+            "default_csv": default_csv_info,
+        }
+
+    def _build_admin_usage_stats() -> Dict[str, Any]:
+        with session_scope(SessionLocal) as s:
+            user_count = int(s.query(User).count())
+            history_count = int(s.query(RecommendationHistory).count())
+            saved_car_count = int(s.query(SavedCar).count())
+            histories = (
+                s.query(RecommendationHistory)
+                .order_by(RecommendationHistory.created_at.desc())
+                .limit(500)
+                .all()
+            )
+
+        action_counts = {"recommend": 0, "evaluate": 0, "compare": 0, "stock": 0, "other": 0}
+        badge_counts = {"green": 0, "yellow": 0, "red": 0}
+
+        daily_map: Dict[str, int] = {}
+        for it in histories:
+            dkey = (it.created_at or dt.datetime.now()).date().isoformat()
+            daily_map[dkey] = int(daily_map.get(dkey, 0)) + 1
+
+            payload = _safe_json_loads(it.payload_json) or {}
+            action = str(payload.get("action") or "other")
+            if action not in action_counts:
+                action = "other"
+            action_counts[action] = int(action_counts[action]) + 1
+
+            results = payload.get("results")
+            if isinstance(results, list):
+                for r in results:
+                    if not isinstance(r, dict):
+                        continue
+                    badge = str(r.get("badge") or "").strip()
+                    if badge in badge_counts:
+                        badge_counts[badge] = int(badge_counts[badge]) + 1
+
+        today = dt.date.today()
+        daily_labels: List[str] = []
+        daily_values: List[int] = []
+        for i in range(13, -1, -1):
+            d = today - dt.timedelta(days=i)
+            key = d.isoformat()
+            daily_labels.append(d.strftime("%d/%m"))
+            daily_values.append(int(daily_map.get(key, 0)))
+
+        total_recommendation_badges = int(sum(badge_counts.values()))
+        green_rate = (badge_counts["green"] / total_recommendation_badges * 100.0) if total_recommendation_badges else 0.0
+        red_rate = (badge_counts["red"] / total_recommendation_badges * 100.0) if total_recommendation_badges else 0.0
+
+        return {
+            "user_count": user_count,
+            "history_count": history_count,
+            "saved_car_count": saved_car_count,
+            "action_counts": action_counts,
+            "badge_counts": badge_counts,
+            "daily_labels": daily_labels,
+            "daily_values": daily_values,
+            "green_rate": green_rate,
+            "red_rate": red_rate,
+        }
+
     @app.get("/admin")
     @login_required
     def admin():
@@ -1542,7 +1751,17 @@ def create_app() -> Flask:
         with session_scope(SessionLocal) as s:
             users = s.query(User).order_by(User.id.asc()).all()
             criteria = s.query(CriteriaConfig).order_by(CriteriaConfig.id.asc()).all()
-        return render_template("admin.html", users=users, criteria=criteria)
+        model_metrics = _build_model_metrics()
+        usage_stats = _build_admin_usage_stats()
+        file_reports = _build_admin_file_reports()
+        return render_template(
+            "admin.html",
+            users=users,
+            criteria=criteria,
+            model_metrics=model_metrics,
+            usage_stats=usage_stats,
+            file_reports=file_reports,
+        )
 
     @app.post("/admin/criteria")
     @login_required
@@ -1558,7 +1777,9 @@ def create_app() -> Flask:
             n = len(keys)
 
             try:
-                mat = parse_pairwise_matrix_text(matrix_text, n)
+                mat = parse_pairwise_matrix_from_form(n)
+                if mat is None:
+                    mat = parse_pairwise_matrix_text(matrix_text, n)
                 res = compute_ahp_weights(mat)
             except Exception as e:
                 flash(f"Ma trận AHP không hợp lệ: {e}", "danger")
