@@ -1868,5 +1868,17 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    # For production on Windows: waitress-serve --call app:create_app
-    app.run(debug=True, port=5002)
+    # Render (and most PaaS) requires binding to 0.0.0.0 and the injected PORT.
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "5002"))
+    debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in {"1", "true", "yes", "on"}
+
+    if debug:
+        app.run(debug=True, host=host, port=port)
+    else:
+        try:
+            from waitress import serve
+
+            serve(app, host=host, port=port)
+        except Exception:
+            app.run(debug=False, host=host, port=port)
