@@ -44,6 +44,7 @@
 
         <h3 style="margin-top:18px;">Retrain AI</h3>
         <form method="post" action="{{ url_for('admin_retrain') }}" enctype="multipart/form-data">
+            <input type="hidden" name="return_tab" value="tab-ahp" />
             <div class="grid">
                 <div class="col-6">
                     <label>Upload cars.csv mới (tuỳ chọn)</label>
@@ -60,6 +61,25 @@
 
     <div id="tab-model" class="admin-pane">
         <h3>Model Metrics</h3>
+        <div class="card" style="margin:0 0 12px;">
+            <h4 style="margin:0 0 8px;">Upload CSV và Retrain từ tab Model</h4>
+            <form method="post" action="{{ url_for('admin_retrain') }}" enctype="multipart/form-data">
+                <input type="hidden" name="return_tab" value="tab-model" />
+                <div class="grid">
+                    <div class="col-6">
+                        <label>File dữ liệu .csv (tuỳ chọn)</label>
+                        <input type="file" name="csv_file" accept=".csv" />
+                    </div>
+                    <div class="col-6">
+                        <label>Ghi chú retrain</label>
+                        <input type="text" name="note" placeholder="vd: retrain nhanh từ tab model" />
+                    </div>
+                    <div class="col-12">
+                        <button class="btn" type="submit">Upload CSV & Retrain</button>
+                    </div>
+                </div>
+            </form>
+        </div>
         {% if model_metrics.available %}
         <div class="grid">
             <div class="col-3">
@@ -303,16 +323,25 @@
     (function () {
         var tabButtons = document.querySelectorAll('.admin-tab');
         var panes = document.querySelectorAll('.admin-pane');
+
+        function activateTab(tabId) {
+            tabButtons.forEach(function (b) { b.classList.remove('active'); });
+            panes.forEach(function (p) { p.classList.remove('active'); });
+            var btn = document.querySelector('.admin-tab[data-admin-tab="' + tabId + '"]');
+            var pane = document.getElementById(tabId);
+            if (btn) btn.classList.add('active');
+            if (pane) pane.classList.add('active');
+        }
+
         tabButtons.forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var tabId = btn.getAttribute('data-admin-tab');
-                tabButtons.forEach(function (b) { b.classList.remove('active'); });
-                panes.forEach(function (p) { p.classList.remove('active'); });
-                btn.classList.add('active');
-                var pane = document.getElementById(tabId);
-                if (pane) pane.classList.add('active');
+                activateTab(tabId);
             });
         });
+
+        var tabFromQuery = new URLSearchParams(window.location.search).get('tab');
+        if (tabFromQuery) activateTab(tabFromQuery);
     })();
 
     (function () {

@@ -1801,13 +1801,16 @@ def create_app() -> Flask:
         if not require_admin():
             return redirect(url_for("home"))
 
+        return_tab = (request.form.get("return_tab") or "").strip()
+        safe_tab = return_tab if return_tab in {"tab-ahp", "tab-model", "tab-usage", "tab-logs"} else None
+
         csv_path = Path(settings.cars_csv_path)
         uploaded = request.files.get("csv_file")
         if uploaded and uploaded.filename:
             filename = secure_filename(uploaded.filename)
             if not filename.lower().endswith(".csv"):
                 flash("Chỉ cho phép upload file .csv", "danger")
-                return redirect(url_for("admin"))
+                return redirect(url_for("admin", tab=safe_tab) if safe_tab else url_for("admin"))
 
             # Enforce per-file size limit (in addition to MAX_CONTENT_LENGTH)
             max_bytes = int(app.config.get("MAX_CONTENT_LENGTH") or (5 * 1024 * 1024))
@@ -1820,7 +1823,7 @@ def create_app() -> Flask:
 
             if size and size > max_bytes:
                 flash(f"File quá lớn ({size // 1024}KB). Giới hạn {max_bytes // (1024 * 1024)}MB.", "danger")
-                return redirect(url_for("admin"))
+                return redirect(url_for("admin", tab=safe_tab) if safe_tab else url_for("admin"))
 
             # Save with a timestamped name to avoid overwriting.
             ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -1843,7 +1846,7 @@ def create_app() -> Flask:
         except Exception as e:
             flash(f"Retrain thất bại: {e}", "danger")
 
-        return redirect(url_for("admin"))
+        return redirect(url_for("admin", tab=safe_tab) if safe_tab else url_for("admin"))
 
     @app.post("/admin/make-admin/<int:user_id>")
     @login_required
