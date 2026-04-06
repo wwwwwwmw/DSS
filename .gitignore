@@ -1,5 +1,17 @@
-cars.csv
 .env
+.env.*
+!.env.example
 
-car_advisor_rf.pkl
-    
+# Local dataset
+cars.csv
+
+.venv/
+__pycache__/
+*.pyc
+
+# Local databases and logs
+*.sqlite3
+logs/*.log
+
+# Generated model artifacts
+models/*.pkl

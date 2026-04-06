@@ -16,13 +16,26 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    load_dotenv(override=False)
+    # On Render, rely on dashboard environment variables instead of a committed local .env file.
+    is_render = str(os.getenv("RENDER", "")).strip().lower() in {"1", "true", "yes", "on"}
+    if not is_render:
+        load_dotenv(override=False)
 
     secret_key = os.getenv("SECRET_KEY", "change-me")
 
     # SECURITY: never commit your real `.env` file.
     # Put secrets in `.env` locally and keep `.env.example` as a template.
     database_url_env = os.getenv("DATABASE_URL")
+    if database_url_env and str(database_url_env).startswith("mssql+pyodbc"):
+        try:
+            import pyodbc  # noqa: F401
+        except Exception:
+            warnings.warn(
+                "pyodbc is unavailable for mssql+pyodbc DATABASE_URL; falling back to SQLite.",
+                RuntimeWarning,
+            )
+            database_url_env = "sqlite:///dss.sqlite3"
+
     if not database_url_env:
         warnings.warn(
             "DATABASE_URL is not set; falling back to SQLite (sqlite:///dss.sqlite3). "
