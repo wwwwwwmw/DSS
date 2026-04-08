@@ -14,5 +14,5 @@ __pycache__/
 logs/*.log
 
 # Generated model artifacts
-models/*.pkl
-*.pkl
+# models/*.pkl
+# *.pkl

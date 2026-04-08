@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import math
 import pickle
@@ -55,8 +56,18 @@ def load_models(model_path: str) -> Optional[LoadedModels]:
     path = Path(model_path)
     if not path.exists():
         return None
-    with path.open("rb") as f:
-        pkg = pickle.load(f)
+
+    # Auto-detect gzip so existing .pkl and new compressed model files both work.
+    with path.open("rb") as fh:
+        sig = fh.read(2)
+
+    if sig == b"\x1f\x8b":
+        with gzip.open(path, "rb") as f:
+            pkg = pickle.load(f)
+    else:
+        with path.open("rb") as f:
+            pkg = pickle.load(f)
+
     return LoadedModels(
         preprocessor=pkg["preprocessor"],
         accident_clf=pkg["accident_clf"],

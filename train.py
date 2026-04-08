@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import gzip
 import logging
+import os
 import pickle
 import sys
 import time
@@ -95,8 +97,13 @@ def train(
     sample_rows: int | None = None,
     sample_frac: float | None = None,
     fast: bool = False,
-    n_estimators_clf: int = 200,
-    n_estimators_reg: int = 260,
+    n_estimators_clf: int = 120,
+    n_estimators_reg: int = 140,
+    max_depth_clf: int = 14,
+    max_depth_reg: int = 14,
+    min_samples_leaf_clf: int = 12,
+    min_samples_leaf_reg: int = 16,
+    max_samples: float = 0.35,
     step: int = 20,
 ):
     started_all = time.perf_counter()
@@ -198,10 +205,25 @@ def train(
         X_test_np = preprocessor.transform(X_test)
 
         if fast:
-            n_estimators_clf = min(n_estimators_clf, 120)
-            n_estimators_reg = min(n_estimators_reg, 160)
+            n_estimators_clf = min(n_estimators_clf, 70)
+            n_estimators_reg = min(n_estimators_reg, 90)
+            max_depth_clf = min(max_depth_clf, 10)
+            max_depth_reg = min(max_depth_reg, 10)
+            min_samples_leaf_clf = max(min_samples_leaf_clf, 20)
+            min_samples_leaf_reg = max(min_samples_leaf_reg, 24)
+            max_samples = min(max_samples, 0.25)
             step = min(step, 20)
-            logger.info("FAST mode enabled: clf=%d reg=%d step=%d", n_estimators_clf, n_estimators_reg, step)
+            logger.info(
+                "FAST mode enabled: clf=%d reg=%d depth=(%d,%d) leaf=(%d,%d) max_samples=%.2f step=%d",
+                n_estimators_clf,
+                n_estimators_reg,
+                max_depth_clf,
+                max_depth_reg,
+                min_samples_leaf_clf,
+                min_samples_leaf_reg,
+                max_samples,
+                step,
+            )
 
         # Stable class weights for warm_start
         class_weight = None
@@ -219,7 +241,11 @@ def train(
             class_weight=class_weight,
             n_jobs=-1,
             max_features="sqrt",
-            min_samples_leaf=2,
+            min_samples_leaf=max(1, int(min_samples_leaf_clf)),
+            max_depth=max(2, int(max_depth_clf)),
+            max_leaf_nodes=2048,
+            bootstrap=True,
+            max_samples=min(1.0, max(0.05, float(max_samples))),
         )
 
         done = 0
@@ -242,7 +268,11 @@ def train(
             random_state=42,
             n_jobs=-1,
             max_features=0.7,
-            min_samples_leaf=2,
+            min_samples_leaf=max(1, int(min_samples_leaf_reg)),
+            max_depth=max(2, int(max_depth_reg)),
+            max_leaf_nodes=2048,
+            bootstrap=True,
+            max_samples=min(1.0, max(0.05, float(max_samples))),
         )
 
         done = 0
@@ -298,10 +328,13 @@ def train(
 
         out = Path(model_path)
         out.parent.mkdir(parents=True, exist_ok=True)
-        with out.open("wb") as f:
-            pickle.dump(pkg, f)
+        with gzip.open(out, "wb", compresslevel=3) as f:
+            pickle.dump(pkg, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        out_size_mb = os.path.getsize(out) / (1024 * 1024)
 
         logger.info("Saved model package to: %s", out)
+        logger.info("Model file size: %.2f MB", out_size_mb)
         logger.info("Total elapsed: %s", _fmt_seconds(time.perf_counter() - started_all))
         logger.info("Log file: %s", log_file)
 
@@ -318,8 +351,13 @@ def main():
     ap.add_argument("--sample-rows", type=int, default=None, help="Subsample N rows for faster training")
     ap.add_argument("--sample-frac", type=float, default=None, help="Subsample fraction (0-1) for faster training")
     ap.add_argument("--fast", action="store_true", help="Use smaller models for quick demo")
-    ap.add_argument("--n-estimators-clf", type=int, default=200)
-    ap.add_argument("--n-estimators-reg", type=int, default=260)
+    ap.add_argument("--n-estimators-clf", type=int, default=120)
+    ap.add_argument("--n-estimators-reg", type=int, default=140)
+    ap.add_argument("--max-depth-clf", type=int, default=14)
+    ap.add_argument("--max-depth-reg", type=int, default=14)
+    ap.add_argument("--min-samples-leaf-clf", type=int, default=12)
+    ap.add_argument("--min-samples-leaf-reg", type=int, default=16)
+    ap.add_argument("--max-samples", type=float, default=0.35, help="Per-tree row sampling ratio (0-1]")
     ap.add_argument("--step", type=int, default=20, help="Progress step for warm_start training")
     args = ap.parse_args()
 
@@ -331,6 +369,11 @@ def main():
         fast=args.fast,
         n_estimators_clf=args.n_estimators_clf,
         n_estimators_reg=args.n_estimators_reg,
+        max_depth_clf=args.max_depth_clf,
+        max_depth_reg=args.max_depth_reg,
+        min_samples_leaf_clf=args.min_samples_leaf_clf,
+        min_samples_leaf_reg=args.min_samples_leaf_reg,
+        max_samples=args.max_samples,
         step=args.step,
     )
 

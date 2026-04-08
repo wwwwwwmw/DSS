@@ -250,11 +250,13 @@ def create_app() -> Flask:
                 "Trung b?nh": "Trung bình",
                 "C?n c?n nh?c": "Cần cân nhắc",
                 "c?n c?n nh?c": "cần cân nhắc",
-                "NÊN CẦN NH?C": "NÊN CÂN NHẮC",
+                "NÊN CÂN NH?C": "NÊN CÂN NHẮC",
                 "Kh?ng n?n mua": "Không nên mua",
                 "R?i ro": "Rủi ro",
                 "b?o d??ng": "bảo dưỡng",
                 "nh?c": "nhắc",
+                "Phuong án": "Phương án",
+                "UU TIÊN": "ƯU TIÊN",
             }
             out = txt
             for bad, good in replacements.items():
