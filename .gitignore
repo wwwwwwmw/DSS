@@ -3,7 +3,7 @@
 !.env.example
 
 # Local dataset
-cars.csv
+# cars.csv
 
 .venv/
 __pycache__/
@@ -15,3 +15,4 @@ logs/*.log
 
 # Generated model artifacts
 models/*.pkl
+*.pkl

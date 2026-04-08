@@ -8,6 +8,7 @@ import sys
 import re
 import math
 import csv
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -188,17 +189,18 @@ def create_app() -> Flask:
     # Market stats cache (loaded once at startup, refreshed on retrain)
     # ------------------------------------------------------------------
     _market_stats_cache: Dict[str, Any] = {}
+    _market_stats_lock = threading.Lock()
 
     def get_market_stats() -> Optional[Dict[str, Dict[str, float]]]:
         if "stats" not in _market_stats_cache:
-            _market_stats_cache["stats"] = load_market_stats(settings.cars_csv_path)
+            with _market_stats_lock:
+                if "stats" not in _market_stats_cache:
+                    _market_stats_cache["stats"] = load_market_stats(settings.cars_csv_path)
         return _market_stats_cache.get("stats")
 
     def refresh_market_stats() -> None:
-        _market_stats_cache["stats"] = load_market_stats(settings.cars_csv_path)
-
-    # Eager-load on startup
-    get_market_stats()
+        with _market_stats_lock:
+            _market_stats_cache["stats"] = load_market_stats(settings.cars_csv_path)
 
     def _safe_json_loads(s: str) -> Any:
         try:
