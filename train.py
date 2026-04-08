@@ -97,13 +97,13 @@ def train(
     sample_rows: int | None = None,
     sample_frac: float | None = None,
     fast: bool = False,
-    n_estimators_clf: int = 120,
-    n_estimators_reg: int = 140,
-    max_depth_clf: int = 14,
-    max_depth_reg: int = 14,
-    min_samples_leaf_clf: int = 12,
-    min_samples_leaf_reg: int = 16,
-    max_samples: float = 0.35,
+    n_estimators_clf: int = 420,
+    n_estimators_reg: int = 520,
+    max_depth_clf: int = 24,
+    max_depth_reg: int = 24,
+    min_samples_leaf_clf: int = 2,
+    min_samples_leaf_reg: int = 2,
+    max_samples: float = 0.9,
     step: int = 20,
 ):
     started_all = time.perf_counter()
@@ -351,13 +351,13 @@ def main():
     ap.add_argument("--sample-rows", type=int, default=None, help="Subsample N rows for faster training")
     ap.add_argument("--sample-frac", type=float, default=None, help="Subsample fraction (0-1) for faster training")
     ap.add_argument("--fast", action="store_true", help="Use smaller models for quick demo")
-    ap.add_argument("--n-estimators-clf", type=int, default=120)
-    ap.add_argument("--n-estimators-reg", type=int, default=140)
-    ap.add_argument("--max-depth-clf", type=int, default=14)
-    ap.add_argument("--max-depth-reg", type=int, default=14)
-    ap.add_argument("--min-samples-leaf-clf", type=int, default=12)
-    ap.add_argument("--min-samples-leaf-reg", type=int, default=16)
-    ap.add_argument("--max-samples", type=float, default=0.35, help="Per-tree row sampling ratio (0-1]")
+    ap.add_argument("--n-estimators-clf", type=int, default=420)
+    ap.add_argument("--n-estimators-reg", type=int, default=520)
+    ap.add_argument("--max-depth-clf", type=int, default=24)
+    ap.add_argument("--max-depth-reg", type=int, default=24)
+    ap.add_argument("--min-samples-leaf-clf", type=int, default=2)
+    ap.add_argument("--min-samples-leaf-reg", type=int, default=2)
+    ap.add_argument("--max-samples", type=float, default=0.9, help="Per-tree row sampling ratio (0-1]")
     ap.add_argument("--step", type=int, default=20, help="Progress step for warm_start training")
     args = ap.parse_args()
 
