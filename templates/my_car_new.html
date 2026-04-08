@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>Thêm xe vào danh sách của tôi</h2>
+    <div class="small">Nhập thông tin xe thủ công rồi lưu vào mục Xe của tôi.</div>
+
+    <div class="actions" style="margin-top:10px;">
+        <a class="btn secondary" href="{{ url_for('my_cars') }}">Quay lại</a>
+    </div>
+</div>
+
+<div class="card">
+    <form method="post" action="{{ url_for('save_my_cars') }}">
+        <input type="hidden" name="source" value="manual" />
+        <input type="hidden" name="return_to" value="{{ url_for('my_car_new') }}" />
+
+        <h3>1) Tiêu đề (tuỳ chọn)</h3>
+        <div class="grid">
+            <div class="col-6">
+                <label>Tiêu đề</label>
+                <input name="title" placeholder="vd: Xe đi làm - Toyota 2019" />
+            </div>
+        </div>
+
+        <h3 style="margin-top:14px;">2) Thông tin xe</h3>
+        <div class="small">Các trường có dấu * là bắt buộc.</div>
+
+        <div data-car-form="1" data-min="1">
+            <div class="car-list">
+                <div class="card car-card" data-prefix="car" data-index="0" style="margin:12px 0;">
+                    <div class="actions">
+                        <b class="car-title">Xe mới</b>
+                    </div>
+                    <div class="grid">
+                        <div class="col-3"><label>Giá bán ($)*</label><input name="car0_price" /></div>
+                        <div class="col-3"><label>Số dặm*</label><input name="car0_mileage" /></div>
+                        <div class="col-3"><label>Năm sản xuất*</label><input name="car0_year" /></div>
+                        <div class="col-3"><label>Tai nạn/Hỏng hóc*</label>
+                            <select name="car0_accidents_or_damage">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Không</option>
+                                <option value="1">1 - Có</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Một chủ duy nhất*</label>
+                            <select name="car0_one_owner">
+                                <option value="">-- Chọn --</option>
+                                <option value="0">0 - Nhiều chủ</option>
+                                <option value="1">1 - Một chủ</option>
+                            </select>
+                        </div>
+                        <div class="col-3"><label>MPG (Tiêu thụ NL)</label><input name="car0_mpg" /></div>
+                        <div class="col-3"><label>Đánh giá lái xe (0-5)</label>
+                            <select name="car0_driver_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{ r }}">{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Đánh giá người bán (0-5)</label>
+                            <select name="car0_seller_rating">
+                                <option value="">-- Chọn --</option>
+                                {% for r in range(6) %}
+                                <option value="{{ r }}">{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3"><label>Giảm giá ($)</label><input name="car0_price_drop" /></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn" type="submit">Lưu vào Xe của tôi</button>
+    </form>
+</div>
+{% endblock %}

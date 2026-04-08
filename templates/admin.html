@@ -160,9 +160,13 @@
 
         <div class="card" style="margin-top:12px;">
             <h4 style="margin:0 0 10px;">Danh sách người dùng</h4>
+            <div class="actions" style="margin-bottom:10px;">
+                <a class="btn" href="{{ url_for('admin_user_new') }}">+ Thêm user</a>
+            </div>
             <table class="table">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Email</th>
                         <th>Role</th>
                         <th>Hành động</th>
@@ -171,13 +175,22 @@
                 <tbody>
                     {% for u in users %}
                     <tr>
+                        <td>{{ u.id }}</td>
                         <td>{{ u.email }}</td>
                         <td>{{ u.role }}</td>
                         <td>
+                            <a class="btn secondary" href="{{ url_for('admin_user_detail', user_id=u.id) }}">Chi
+                                tiết</a>
+                            <a class="btn secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Sửa</a>
+                            <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}"
+                                style="display:inline"
+                                onsubmit="return confirm('Xóa user này và toàn bộ dữ liệu liên quan?');">
+                                <button class="btn danger" type="submit">Xóa</button>
+                            </form>
                             {% if u.role != 'admin' %}
                             <form method="post" action="{{ url_for('admin_make_admin', user_id=u.id) }}"
                                 style="display:inline">
-                                <button class="btn secondary" type="submit">Set admin</button>
+                                <button class="btn secondary" type="submit">Cấp quyền admin</button>
                             </form>
                             {% else %}
                             <span class="badge info">Admin</span>

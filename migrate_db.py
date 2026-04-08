@@ -107,7 +107,13 @@ END
 """.strip()
 
 
-def plan_mssql_migrations(*, migrate_default_weight: bool, migrate_history_created_at: bool, migrate_saved_created_at: bool) -> MigrationPlan:
+def plan_mssql_migrations(
+    *,
+    migrate_default_weight: bool,
+    migrate_history_created_at: bool,
+    migrate_saved_created_at: bool,
+    migrate_unicode_columns: list[tuple[str, str, str]],
+) -> MigrationPlan:
     stmts: list[str] = []
 
     # 1) criteria_config.default_weight => FLOAT NOT NULL DEFAULT(0)
@@ -139,6 +145,11 @@ def plan_mssql_migrations(*, migrate_default_weight: bool, migrate_history_creat
     if migrate_saved_created_at:
         add_created_at_migration("saved_cars")
 
+    # 3) Text columns that must support Vietnamese properly => NVARCHAR/NVARCHAR(MAX)
+    for table, column, target_sql_type in migrate_unicode_columns:
+        stmts.append(_mssql_drop_default_constraint_sql(table, column))
+        stmts.append(f"ALTER TABLE dbo.{table} ALTER COLUMN {column} {target_sql_type} NOT NULL;")
+
     return MigrationPlan(statements=stmts)
 
 
@@ -167,6 +178,13 @@ def _mssql_column_type(conn, table: str, column: str) -> Optional[str]:
         {"t": table, "c": column},
     ).fetchone()
     return None if not r else str(r[0]).lower()
+
+
+def _mssql_needs_unicode(conn, table: str, column: str) -> bool:
+    dt = _mssql_column_type(conn, table, column)
+    if not dt:
+        return False
+    return dt in {"varchar", "char", "text"}
 
 
 def apply_plan(database_url: str, plan: MigrationPlan, *, dry_run: bool) -> None:
@@ -206,6 +224,19 @@ def migrate(database_url: str, *, dry_run: bool = False) -> None:
             ca1 = _mssql_column_type(conn, "recommendation_history", "created_at")
             ca2 = _mssql_column_type(conn, "saved_cars", "created_at")
 
+            unicode_candidates: list[tuple[str, str, str, str]] = [
+                ("recommendation_history", "summary", "NVARCHAR(400)", "recommendation_history.summary"),
+                ("recommendation_history", "payload_json", "NVARCHAR(MAX)", "recommendation_history.payload_json"),
+                ("saved_cars", "title", "NVARCHAR(200)", "saved_cars.title"),
+                ("saved_cars", "car_json", "NVARCHAR(MAX)", "saved_cars.car_json"),
+                ("criteria_config", "label", "NVARCHAR(200)", "criteria_config.label"),
+            ]
+            migrate_unicode_columns = [
+                (t, c, ty)
+                for (t, c, ty, _name) in unicode_candidates
+                if _mssql_needs_unicode(conn, t, c)
+            ]
+
         migrate_default_weight = bool(dw and dw != "float")
         migrate_history_created_at = bool(ca1 and ca1 != "datetimeoffset")
         migrate_saved_created_at = bool(ca2 and ca2 != "datetimeoffset")
@@ -217,6 +248,9 @@ def migrate(database_url: str, *, dry_run: bool = False) -> None:
             needs.append("recommendation_history.created_at")
         if migrate_saved_created_at:
             needs.append("saved_cars.created_at")
+        for (_t, _c, _ty, name) in unicode_candidates:
+            if any((t == _t and c == _c) for (t, c, _ty2) in migrate_unicode_columns):
+                needs.append(name)
 
         if not needs:
             print("No SQL Server migrations needed.")
@@ -230,6 +264,7 @@ def migrate(database_url: str, *, dry_run: bool = False) -> None:
             migrate_default_weight=migrate_default_weight,
             migrate_history_created_at=migrate_history_created_at,
             migrate_saved_created_at=migrate_saved_created_at,
+            migrate_unicode_columns=migrate_unicode_columns,
         )
         apply_plan(database_url, plan, dry_run=dry_run)
         print("SQL Server migration applied." if not dry_run else "SQL Server dry-run complete.")

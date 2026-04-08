@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 
 from flask_login import UserMixin
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Unicode, UnicodeText
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db import Base
@@ -30,8 +30,8 @@ class RecommendationHistory(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     car_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    summary: Mapped[str] = mapped_column(String(400), nullable=False)
-    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Unicode(400), nullable=False)
+    payload_json: Mapped[str] = mapped_column(UnicodeText, nullable=False)
 
 
 class SavedCar(Base):
@@ -41,9 +41,9 @@ class SavedCar(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
-    title: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    title: Mapped[str] = mapped_column(Unicode(200), nullable=False, default="")
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")  # manual | stock
-    car_json: Mapped[str] = mapped_column(Text, nullable=False)
+    car_json: Mapped[str] = mapped_column(UnicodeText, nullable=False)
 
 
 class CriteriaConfig(Base):
@@ -51,6 +51,6 @@ class CriteriaConfig(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     key: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    label: Mapped[str] = mapped_column(Unicode(200), nullable=False)
     direction: Mapped[str] = mapped_column(String(16), nullable=False)  # 'benefit' | 'cost'
     default_weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

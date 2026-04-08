@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+    <h2>{% if mode == 'new' %}Thêm user mới{% else %}Sửa thông tin user{% endif %}</h2>
+    <div class="small">
+        {% if mode == 'new' %}
+        Tạo tài khoản user từ trang quản trị.
+        {% else %}
+        Chỉnh sửa email/role và có thể đổi mật khẩu.
+        {% endif %}
+    </div>
+
+    <div class="actions" style="margin-top:10px;">
+        <a class="btn secondary" href="{{ url_for('admin', tab='tab-usage') }}">Quay lại Admin</a>
+        {% if mode == 'edit' and user_item %}
+        <a class="btn secondary" href="{{ url_for('admin_user_detail', user_id=user_item.id) }}">Xem chi tiết</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <form method="post"
+        action="{% if mode == 'new' %}{{ url_for('admin_user_create') }}{% else %}{{ url_for('admin_user_update', user_id=user_item.id) }}{% endif %}">
+        <div class="grid">
+            <div class="col-6">
+                <label>Email*</label>
+                <input type="email" name="email" value="{{ user_item.email if user_item else '' }}" required />
+            </div>
+            <div class="col-6">
+                <label>Role*</label>
+                <select name="role" required>
+                    <option value="user" {% if not user_item or user_item.role=='user' %}selected{% endif %}>user
+                    </option>
+                    <option value="admin" {% if user_item and user_item.role=='admin' %}selected{% endif %}>admin
+                    </option>
+                </select>
+            </div>
+            <div class="col-6">
+                <label>{% if mode == 'new' %}Mật khẩu*{% else %}Mật khẩu mới (để trống nếu giữ nguyên){% endif
+                    %}</label>
+                <input type="password" name="password" {% if mode=='new' %}required{% endif %} />
+            </div>
+        </div>
+
+        <button class="btn" type="submit">{% if mode == 'new' %}Tạo user{% else %}Lưu thay đổi{% endif %}</button>
+    </form>
+</div>
+{% endblock %}

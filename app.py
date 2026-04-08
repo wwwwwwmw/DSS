@@ -227,20 +227,92 @@ def create_app() -> Flask:
             pass
         return str(obj)
 
+    def _repair_mojibake_text(s: Any) -> Any:
+        """Best-effort fix for UTF-8 text that was mis-decoded as latin-1/cp1252."""
+        if not isinstance(s, str) or not s:
+            return s
+
+        def _normalize_known_vi_glitches(txt: str) -> str:
+            # Common Vietnamese fragments that become unreadable after codepage mismatch.
+            replacements = {
+                "Tu v?n": "Tư vấn",
+                "Kh�ng c�": "Không có",
+                "Kh�ng": "Không",
+                "v?i": "với",
+                "th?": "thị",
+                "tru?ng": "trường",
+                "xe xanh": "xe xanh",
+                "��nh gi�": "Đánh giá",
+                "Ðánh giá": "Đánh giá",
+                "R?t th?p": "Rất thấp",
+                "R?t cao": "Rất cao",
+                "Th?p": "Thấp",
+                "Trung b?nh": "Trung bình",
+                "C?n c?n nh?c": "Cần cân nhắc",
+                "c?n c?n nh?c": "cần cân nhắc",
+                "NÊN CẦN NH?C": "NÊN CÂN NHẮC",
+                "Kh?ng n?n mua": "Không nên mua",
+                "R?i ro": "Rủi ro",
+                "b?o d??ng": "bảo dưỡng",
+                "nh?c": "nhắc",
+            }
+            out = txt
+            for bad, good in replacements.items():
+                out = out.replace(bad, good)
+            return out
+
+        # Fast path: only attempt repair when suspicious mojibake markers appear.
+        suspicious_tokens = ("Ã", "Â", "Ä", "Å", "Æ", "Ð", "Ø", "Þ", "â€", "â€“", "â€”", "�", "?")
+        if not any(tok in s for tok in suspicious_tokens):
+            return s
+
+        candidates = [s]
+        for src_enc in ("latin-1", "cp1252"):
+            for dst_enc in ("utf-8", "cp1258"):
+                try:
+                    candidates.append(s.encode(src_enc).decode(dst_enc))
+                except Exception:
+                    pass
+
+        def score(txt: str) -> int:
+            # Higher is better: reward Vietnamese letters, penalize replacement chars / stray '?'.
+            vi_chars = set("ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵĂÂĐÊÔƠƯÁÀẢÃẠẤẦẨẪẬẮẰẲẴẶÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴ")
+            good = sum(1 for ch in txt if ch in vi_chars)
+            bad = txt.count("�") * 4 + txt.count("?")
+            mojibake = sum(txt.count(tok) for tok in ("Ã", "Â", "Ä", "Å", "Æ", "Ð", "â€"))
+            return good - bad - mojibake
+
+        best = max(candidates, key=score)
+        out = best if score(best) >= score(s) else s
+        return _normalize_known_vi_glitches(out)
+
+    def _repair_mojibake_obj(obj: Any) -> Any:
+        if isinstance(obj, str):
+            return _repair_mojibake_text(obj)
+        if isinstance(obj, dict):
+            return {k: _repair_mojibake_obj(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_repair_mojibake_obj(v) for v in obj]
+        if isinstance(obj, tuple):
+            return tuple(_repair_mojibake_obj(v) for v in obj)
+        return obj
+
     def save_history(*, action: str, cars: List[Dict[str, Any]], payload: Dict[str, Any], summary: str):
         if not current_user.is_authenticated:
             return
         # Store action inside payload (schema can evolve without DB migrations).
         payload2 = dict(payload)
         payload2["action"] = action
+        payload2 = _repair_mojibake_obj(payload2)
         payload_json = json.dumps(payload2, ensure_ascii=False)
+        safe_summary = _repair_mojibake_text(summary)
         with session_scope(SessionLocal) as s:
             s.add(
                 RecommendationHistory(
                     user_id=int(current_user.get_id()),
                     created_at=dt.datetime.now(dt.timezone.utc),
                     car_count=len(cars),
-                    summary=summary,
+                    summary=safe_summary,
                     payload_json=payload_json,
                 )
             )
@@ -1219,12 +1291,17 @@ def create_app() -> Flask:
                 {
                     "id": it.id,
                     "created_at": it.created_at,
-                    "title": it.title,
+                    "title": _repair_mojibake_text(it.title),
                     "source": it.source,
-                    "car": _safe_json_loads(it.car_json) or {},
+                    "car": _repair_mojibake_obj(_safe_json_loads(it.car_json) or {}),
                 }
             )
         return render_template("my_cars.html", items=cars_out)
+
+    @app.get("/my-cars/new")
+    @login_required
+    def my_car_new():
+        return render_template("my_car_new.html")
 
     @app.get("/my-cars/<int:item_id>")
     @login_required
@@ -1235,13 +1312,14 @@ def create_app() -> Flask:
                 flash("Không tìm thấy xe.", "danger")
                 return redirect(url_for("my_cars"))
             car = sanitize_for_json(_safe_json_loads(it.car_json) or {})
+            car = _repair_mojibake_obj(car)
 
         return render_template(
             "my_car_detail.html",
             item={
                 "id": it.id,
                 "created_at": it.created_at,
-                "title": it.title,
+                    "title": _repair_mojibake_text(it.title),
                 "source": it.source,
             },
             car=car,
@@ -1488,13 +1566,22 @@ def create_app() -> Flask:
     @login_required
     def history():
         with session_scope(SessionLocal) as s:
-            items = (
+            rows = (
                 s.query(RecommendationHistory)
                 .filter(RecommendationHistory.user_id == int(current_user.get_id()))
                 .order_by(RecommendationHistory.created_at.desc())
                 .limit(50)
                 .all()
             )
+        items = [
+            {
+                "id": it.id,
+                "created_at": it.created_at,
+                "car_count": it.car_count,
+                "summary": _repair_mojibake_text(it.summary),
+            }
+            for it in rows
+        ]
         return render_template("history.html", items=items)
 
     @app.get("/history/<int:item_id>")
@@ -1505,7 +1592,7 @@ def create_app() -> Flask:
             if not it or it.user_id != int(current_user.get_id()):
                 flash("Không tìm thấy bản ghi lịch sử.", "danger")
                 return redirect(url_for("history"))
-            payload = _safe_json_loads(it.payload_json) or {}
+            payload = _repair_mojibake_obj(_safe_json_loads(it.payload_json) or {})
 
         return render_template(
             "history_detail.html",
@@ -1513,7 +1600,7 @@ def create_app() -> Flask:
                 "id": it.id,
                 "created_at": it.created_at,
                 "car_count": it.car_count,
-                "summary": it.summary,
+                "summary": _repair_mojibake_text(it.summary),
             },
             payload=payload,
         )
@@ -1865,6 +1952,165 @@ def create_app() -> Flask:
 
         flash("Đã set admin.", "success")
         return redirect(url_for("admin"))
+
+    @app.get("/admin/users/new")
+    @login_required
+    def admin_user_new():
+        if not require_admin():
+            return redirect(url_for("home"))
+        return render_template("admin_user_form.html", mode="new", user_item=None)
+
+    @app.post("/admin/users/new")
+    @login_required
+    def admin_user_create():
+        if not require_admin():
+            return redirect(url_for("home"))
+
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        role = request.form.get("role", "user").strip().lower()
+
+        if not email:
+            flash("Email không được để trống.", "danger")
+            return redirect(url_for("admin_user_new"))
+        if len(password) < 6:
+            flash("Mật khẩu tối thiểu 6 ký tự.", "danger")
+            return redirect(url_for("admin_user_new"))
+        if role not in {"user", "admin"}:
+            role = "user"
+
+        with session_scope(SessionLocal) as s:
+            exists = s.query(User).filter(User.email == email).first()
+            if exists:
+                flash("Email đã tồn tại.", "danger")
+                return redirect(url_for("admin_user_new"))
+            s.add(User(email=email, password_hash=generate_password_hash(password), role=role))
+
+        flash("Đã thêm user mới.", "success")
+        return redirect(url_for("admin", tab="tab-usage"))
+
+    @app.get("/admin/users/<int:user_id>")
+    @login_required
+    def admin_user_detail(user_id: int):
+        if not require_admin():
+            return redirect(url_for("home"))
+
+        with session_scope(SessionLocal) as s:
+            u = s.get(User, user_id)
+            if not u:
+                flash("User không tồn tại.", "danger")
+                return redirect(url_for("admin", tab="tab-usage"))
+
+            history_count = (
+                s.query(RecommendationHistory)
+                .filter(RecommendationHistory.user_id == u.id)
+                .count()
+            )
+            saved_count = s.query(SavedCar).filter(SavedCar.user_id == u.id).count()
+
+            recent_history = (
+                s.query(RecommendationHistory)
+                .filter(RecommendationHistory.user_id == u.id)
+                .order_by(RecommendationHistory.created_at.desc())
+                .limit(10)
+                .all()
+            )
+
+            user_out = {"id": u.id, "email": u.email, "role": u.role}
+            hist_out = [
+                {
+                    "id": h.id,
+                    "created_at": h.created_at,
+                    "summary": _repair_mojibake_text(h.summary),
+                    "car_count": h.car_count,
+                }
+                for h in recent_history
+            ]
+
+        return render_template(
+            "admin_user_detail.html",
+            user_item=user_out,
+            history_count=int(history_count),
+            saved_count=int(saved_count),
+            recent_history=hist_out,
+        )
+
+    @app.get("/admin/users/<int:user_id>/edit")
+    @login_required
+    def admin_user_edit(user_id: int):
+        if not require_admin():
+            return redirect(url_for("home"))
+
+        with session_scope(SessionLocal) as s:
+            u = s.get(User, user_id)
+            if not u:
+                flash("User không tồn tại.", "danger")
+                return redirect(url_for("admin", tab="tab-usage"))
+            user_out = {"id": u.id, "email": u.email, "role": u.role}
+
+        return render_template("admin_user_form.html", mode="edit", user_item=user_out)
+
+    @app.post("/admin/users/<int:user_id>/edit")
+    @login_required
+    def admin_user_update(user_id: int):
+        if not require_admin():
+            return redirect(url_for("home"))
+
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        role = request.form.get("role", "user").strip().lower()
+        if role not in {"user", "admin"}:
+            role = "user"
+
+        if not email:
+            flash("Email không được để trống.", "danger")
+            return redirect(url_for("admin_user_edit", user_id=user_id))
+        if password and len(password) < 6:
+            flash("Nếu đổi mật khẩu, cần tối thiểu 6 ký tự.", "danger")
+            return redirect(url_for("admin_user_edit", user_id=user_id))
+
+        with session_scope(SessionLocal) as s:
+            u = s.get(User, user_id)
+            if not u:
+                flash("User không tồn tại.", "danger")
+                return redirect(url_for("admin", tab="tab-usage"))
+
+            exists = s.query(User).filter(User.email == email, User.id != user_id).first()
+            if exists:
+                flash("Email đã được user khác sử dụng.", "danger")
+                return redirect(url_for("admin_user_edit", user_id=user_id))
+
+            u.email = email
+            u.role = role
+            if password:
+                u.password_hash = generate_password_hash(password)
+
+        flash("Đã cập nhật user.", "success")
+        return redirect(url_for("admin_user_detail", user_id=user_id))
+
+    @app.post("/admin/users/<int:user_id>/delete")
+    @login_required
+    def admin_user_delete(user_id: int):
+        if not require_admin():
+            return redirect(url_for("home"))
+
+        current_id = int(current_user.get_id()) if current_user.is_authenticated else -1
+        if user_id == current_id:
+            flash("Không thể tự xóa chính mình.", "danger")
+            return redirect(url_for("admin", tab="tab-usage"))
+
+        with session_scope(SessionLocal) as s:
+            u = s.get(User, user_id)
+            if not u:
+                flash("User không tồn tại.", "danger")
+                return redirect(url_for("admin", tab="tab-usage"))
+
+            s.query(RecommendationHistory).filter(RecommendationHistory.user_id == user_id).delete()
+            s.query(SavedCar).filter(SavedCar.user_id == user_id).delete()
+            s.delete(u)
+
+        flash("Đã xóa user cùng dữ liệu liên quan.", "success")
+        return redirect(url_for("admin", tab="tab-usage"))
 
     return app
 
