@@ -54,3 +54,10 @@ class CriteriaConfig(Base):
     label: Mapped[str] = mapped_column(Unicode(200), nullable=False)
     direction: Mapped[str] = mapped_column(String(16), nullable=False)  # 'benefit' | 'cost'
     default_weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value_json: Mapped[str] = mapped_column(UnicodeText, nullable=False)

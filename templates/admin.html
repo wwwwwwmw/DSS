@@ -362,6 +362,7 @@
     }};
     var n = labels.length;
     var rawDefaults = {{ criteria | map(attribute = 'default_weight') | list | tojson }};
+    var persistedMatrix = {{ (default_pairwise_matrix if default_pairwise_matrix is not none else none) | tojson }};
     var RI = [0, 0, 0, 0.58, 0.90, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49];
 
     var SAATY_OPTIONS = [
@@ -397,6 +398,35 @@
         return best.value;
     }
 
+    function hasValidShape(m) {
+        if (!Array.isArray(m) || m.length !== n) return false;
+        for (var i = 0; i < n; i++) {
+            if (!Array.isArray(m[i]) || m[i].length !== n) return false;
+        }
+        return true;
+    }
+
+    function matrixFromPersisted(raw) {
+        if (!hasValidShape(raw)) return null;
+        var m = [];
+        for (var i = 0; i < n; i++) {
+            m[i] = [];
+            for (var j = 0; j < n; j++) {
+                if (i === j) {
+                    m[i][j] = 1;
+                    continue;
+                }
+                if (j > i) {
+                    var v = Number(raw[i][j]);
+                    if (!Number.isFinite(v) || v <= 0) return null;
+                    m[i][j] = closestSaaty(v);
+                    m[j][i] = 1 / m[i][j];
+                }
+            }
+        }
+        return m;
+    }
+
     function matrixFromDefaults() {
         var ws = rawDefaults.map(function (x) {
             var v = Number(x);
@@ -412,7 +442,7 @@
         return m;
     }
 
-    var matrix = matrixFromDefaults();
+    var matrix = matrixFromPersisted(persistedMatrix) || matrixFromDefaults();
 
     function fmt2(v) {
         return Number(v).toFixed(2);

@@ -37,7 +37,7 @@ from ml import (
     predict,
     serialize_payload,
 )
-from models_db import CriteriaConfig, RecommendationHistory, SavedCar, User
+from models_db import AppSetting, CriteriaConfig, RecommendationHistory, SavedCar, User
 
 
 def create_app() -> Flask:
@@ -134,6 +134,38 @@ def create_app() -> Flask:
                 }
                 for it in items
             ]
+
+    def load_default_pairwise_matrix(n: int) -> Optional[List[List[float]]]:
+        if n <= 0:
+            return None
+        with session_scope(SessionLocal) as s:
+            row = s.get(AppSetting, "default_pairwise_matrix")
+            if not row or not row.value_json:
+                return None
+
+            try:
+                raw = json.loads(row.value_json)
+            except Exception:
+                return None
+
+        if not isinstance(raw, list) or len(raw) != n:
+            return None
+
+        out: List[List[float]] = [[1.0 for _ in range(n)] for _ in range(n)]
+        try:
+            for i in range(n):
+                if not isinstance(raw[i], list) or len(raw[i]) != n:
+                    return None
+                for j in range(i + 1, n):
+                    v = float(raw[i][j])
+                    if not math.isfinite(v) or v <= 0:
+                        return None
+                    out[i][j] = v
+                    out[j][i] = 1.0 / v
+        except Exception:
+            return None
+
+        return out
 
     def get_risk_level(risk_pct: float) -> Dict[str, str]:
         """Chuyển đổi tỷ lệ rủi ro (%) thành nhãn cấp độ.
@@ -812,6 +844,7 @@ def create_app() -> Flask:
     @app.get("/")
     def home():
         criteria = load_criteria()
+        default_matrix = load_default_pairwise_matrix(len(criteria))
         return render_template(
             "index.html",
             criteria=criteria,
@@ -821,7 +854,7 @@ def create_app() -> Flask:
             cars=None,
             weights=None,
             chart_data=None,
-            pairwise_matrix=None,
+            pairwise_matrix=default_matrix,
             option_matrix=None,
         )
 
@@ -830,6 +863,7 @@ def create_app() -> Flask:
         """Đánh giá thị trường: so sánh xe của người dùng với kho CSV (market stats)."""
 
         criteria = load_criteria()
+        default_matrix = load_default_pairwise_matrix(len(criteria))
         if request.method == "GET":
             return render_template(
                 "evaluate.html",
@@ -838,7 +872,7 @@ def create_app() -> Flask:
                 cars=None,
                 weights=None,
                 chart_data=None,
-                pairwise_matrix=None,
+                pairwise_matrix=default_matrix,
                 option_matrix=None,
             )
 
@@ -1851,6 +1885,13 @@ def create_app() -> Flask:
         with session_scope(SessionLocal) as s:
             users = s.query(User).order_by(User.id.asc()).all()
             criteria = s.query(CriteriaConfig).order_by(CriteriaConfig.id.asc()).all()
+            setting = s.get(AppSetting, "default_pairwise_matrix")
+            default_pairwise_matrix = None
+            if setting and setting.value_json:
+                try:
+                    default_pairwise_matrix = json.loads(setting.value_json)
+                except Exception:
+                    default_pairwise_matrix = None
         model_metrics = _build_model_metrics()
         usage_stats = _build_admin_usage_stats()
         file_reports = _build_admin_file_reports()
@@ -1858,6 +1899,7 @@ def create_app() -> Flask:
             "admin.html",
             users=users,
             criteria=criteria,
+            default_pairwise_matrix=default_pairwise_matrix,
             model_metrics=model_metrics,
             usage_stats=usage_stats,
             file_reports=file_reports,
@@ -1891,6 +1933,13 @@ def create_app() -> Flask:
 
             for it, w in zip(items, res.weights):
                 it.default_weight = float(w)
+
+            setting = s.get(AppSetting, "default_pairwise_matrix")
+            matrix_json = json.dumps(mat, ensure_ascii=False)
+            if setting is None:
+                s.add(AppSetting(key="default_pairwise_matrix", value_json=matrix_json))
+            else:
+                setting.value_json = matrix_json
 
         flash("Đã cập nhật trọng số mặc định (AHP).", "success")
         return redirect(url_for("admin"))

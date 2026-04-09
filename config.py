@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from dataclasses import dataclass
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
@@ -39,6 +40,21 @@ def _read_database_url_from_env() -> str:
         val = _normalize_database_url(raw)
         if val:
             return val
+
+    # Fallback: build URL from standard PostgreSQL env vars.
+    host = (os.getenv("PGHOST", "") or os.getenv("POSTGRES_HOST", "")).strip()
+    if host:
+        port = (os.getenv("PGPORT", "") or os.getenv("POSTGRES_PORT", "5432")).strip() or "5432"
+        db = (os.getenv("PGDATABASE", "") or os.getenv("POSTGRES_DB", "")).strip()
+        user = (os.getenv("PGUSER", "") or os.getenv("POSTGRES_USER", "")).strip()
+        pwd = (os.getenv("PGPASSWORD", "") or os.getenv("POSTGRES_PASSWORD", "")).strip()
+
+        if db and user:
+            user_enc = quote_plus(user)
+            pwd_enc = quote_plus(pwd)
+            auth = f"{user_enc}:{pwd_enc}" if pwd else user_enc
+            return f"postgresql+psycopg://{auth}@{host}:{port}/{db}"
+
     return ""
 
 
