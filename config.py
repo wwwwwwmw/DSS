@@ -25,6 +25,23 @@ def _normalize_database_url(url: str) -> str:
     return s
 
 
+def _read_database_url_from_env() -> str:
+    # Render users may store DB URL under different variable names.
+    candidates = [
+        "DATABASE_URL",
+        "INTERNAL_DATABASE_URL",
+        "RENDER_DATABASE_URL",
+        "POSTGRES_URL",
+        "POSTGRESQL_URL",
+    ]
+    for key in candidates:
+        raw = os.getenv(key, "")
+        val = _normalize_database_url(raw)
+        if val:
+            return val
+    return ""
+
+
 def get_settings() -> Settings:
     # On Render, rely on dashboard environment variables instead of a committed local .env file.
     is_render = str(os.getenv("RENDER", "")).strip().lower() in {"1", "true", "yes", "on"}
@@ -35,7 +52,7 @@ def get_settings() -> Settings:
 
     # SECURITY: never commit your real `.env` file.
     # Put secrets in `.env` locally and keep `.env.example` as a template.
-    database_url_env = _normalize_database_url(os.getenv("DATABASE_URL", ""))
+    database_url_env = _read_database_url_from_env()
     if database_url_env and str(database_url_env).startswith("postgresql"):
         try:
             import psycopg  # noqa: F401
@@ -45,6 +62,17 @@ def get_settings() -> Settings:
                 RuntimeWarning,
             )
             database_url_env = "postgresql+psycopg://postgres:postgres@localhost:5432/dss_car_advisor"
+
+    if is_render and (not database_url_env):
+        raise RuntimeError(
+            "Database URL is missing on Render. Set one of: DATABASE_URL, INTERNAL_DATABASE_URL, "
+            "RENDER_DATABASE_URL, POSTGRES_URL, POSTGRESQL_URL."
+        )
+
+    if is_render and "localhost" in str(database_url_env).lower():
+        raise RuntimeError(
+            "Invalid Render database URL: points to localhost. Use your Render PostgreSQL internal URL instead."
+        )
 
     if not database_url_env:
         warnings.warn(
