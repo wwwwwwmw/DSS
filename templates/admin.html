@@ -408,9 +408,8 @@
 
     function matrixFromPersisted(raw) {
         if (!hasValidShape(raw)) return null;
-        var m = [];
+        var m = Array.from({ length: n }, function () { return Array(n).fill(1); });
         for (var i = 0; i < n; i++) {
-            m[i] = [];
             for (var j = 0; j < n; j++) {
                 if (i === j) {
                     m[i][j] = 1;
