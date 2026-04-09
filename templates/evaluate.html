@@ -891,6 +891,14 @@
         if (el) el.setAttribute('data-default', el.value);
     });
 
+    function currentDefaultsSignature() {
+        return keys.map(k => {
+            const el = document.getElementById('hw_' + k);
+            const v = el ? parseNumeric(el.getAttribute('data-default') || el.value) : NaN;
+            return Number.isFinite(v) ? Number(v).toFixed(8) : '1.00000000';
+        }).join('|');
+    }
+
     function parseNumeric(raw) {
         if (raw === null || raw === undefined) return NaN;
         const s = String(raw).trim().replace(',', '.');
@@ -959,8 +967,9 @@
             const stored = window.sessionStorage.getItem(STORAGE_KEY);
             if (stored) {
                 const parsed = JSON.parse(stored);
-                if (hasValidShape(parsed)) {
-                    return normalizeMatrix(parsed);
+                const sig = currentDefaultsSignature();
+                if (parsed && parsed.defaults_signature === sig && hasValidShape(parsed.matrix)) {
+                    return normalizeMatrix(parsed.matrix);
                 }
             }
         } catch (_e) {
@@ -975,7 +984,13 @@
         const payload = JSON.stringify(matrix);
         if (hidden) hidden.value = payload;
         try {
-            window.sessionStorage.setItem(STORAGE_KEY, payload);
+            window.sessionStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({
+                    defaults_signature: currentDefaultsSignature(),
+                    matrix: matrix,
+                })
+            );
         } catch (_e) {
             // Ignore storage write issues.
         }

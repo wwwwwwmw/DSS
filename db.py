@@ -12,8 +12,8 @@ class Base(DeclarativeBase):
 
 def create_session_factory(database_url: str):
     engine_kwargs = {"future": True}
-    # SQL Server: keep pooled connections healthy over long-running app.
-    if str(database_url).startswith("mssql"):
+    # PostgreSQL: keep pooled connections healthy over long-running app.
+    if str(database_url).startswith("postgresql"):
         engine_kwargs.update(
             {
                 "pool_pre_ping": True,

@@ -1526,7 +1526,16 @@ def create_app() -> Flask:
 
         with session_scope(SessionLocal) as s:
             user = s.query(User).filter(User.email == email).first()
-            if not user or not check_password_hash(user.password_hash, password):
+            is_valid_password = False
+            if user:
+                stored = str(user.password_hash or "")
+                if stored.startswith("scrypt:") or stored.startswith("pbkdf2:"):
+                    is_valid_password = check_password_hash(stored, password)
+                else:
+                    # Backward compatibility for seeded plain-text passwords.
+                    is_valid_password = stored == password
+
+            if not user or not is_valid_password:
                 flash("Sai email hoặc mật khẩu.", "danger")
                 return redirect(url_for("login"))
 

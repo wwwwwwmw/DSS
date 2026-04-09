@@ -26,23 +26,23 @@ def get_settings() -> Settings:
     # SECURITY: never commit your real `.env` file.
     # Put secrets in `.env` locally and keep `.env.example` as a template.
     database_url_env = os.getenv("DATABASE_URL")
-    if database_url_env and str(database_url_env).startswith("mssql+pyodbc"):
+    if database_url_env and str(database_url_env).startswith("postgresql"):
         try:
-            import pyodbc  # noqa: F401
+            import psycopg  # noqa: F401
         except Exception:
             warnings.warn(
-                "pyodbc is unavailable for mssql+pyodbc DATABASE_URL; falling back to SQLite.",
+                "psycopg is unavailable for postgresql DATABASE_URL; using local default URL.",
                 RuntimeWarning,
             )
-            database_url_env = "sqlite:///dss.sqlite3"
+            database_url_env = "postgresql+psycopg://postgres:postgres@localhost:5432/dss_car_advisor"
 
     if not database_url_env:
         warnings.warn(
-            "DATABASE_URL is not set; falling back to SQLite (sqlite:///dss.sqlite3). "
-            "For production/SQL Server, set DATABASE_URL to an mssql+pyodbc URL.",
+            "DATABASE_URL is not set; using default PostgreSQL URL "
+            "(postgresql+psycopg://postgres:postgres@localhost:5432/dss_car_advisor).",
             RuntimeWarning,
         )
-    database_url = database_url_env or "sqlite:///dss.sqlite3"
+    database_url = database_url_env or "postgresql+psycopg://postgres:postgres@localhost:5432/dss_car_advisor"
 
     cars_csv_path = os.getenv("CARS_CSV_PATH", "./cars.csv")
     model_path = os.getenv("MODEL_PATH", "./models/car_advisor_rf.pkl")

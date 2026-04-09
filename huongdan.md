@@ -4,7 +4,7 @@
 
 - Windows
 - Python 3.10+ (khuyến nghị)
-- (Nếu dùng SQL Server) SQL Server + **ODBC Driver 18 for SQL Server**
+- PostgreSQL 14+ (khuyến nghị)
 
 ## 1) Mở thư mục dự án
 
@@ -41,28 +41,26 @@ Copy-Item .env.example .env
 Mở `.env` và chỉnh các biến sau:
 
 - `SECRET_KEY`: chuỗi bất kỳ
-- `DATABASE_URL`: chọn 1 trong 2
+- `DATABASE_URL`: PostgreSQL connection string
 
-### 3.1) Dùng SQL Server (khuyến nghị)
+### 3.1) Dùng PostgreSQL (khuyến nghị)
 
-Ví dụ (Windows Integrated Security):
-
-```ini
-DATABASE_URL=mssql+pyodbc://@DESKTOP-ENDTJTR/DSS_CarAdvisor?driver=ODBC+Driver+18+for+SQL+Server&Trusted_Connection=yes&TrustServerCertificate=yes
-```
-
-Nếu máy bạn dùng instance dạng `DESKTOP-ENDTJTR\SQLEXPRESS` thì thay `DESKTOP-ENDTJTR` thành `DESKTOP-ENDTJTR\\SQLEXPRESS`.
-
-Gợi ý tạo database (tùy môi trường của bạn):
-
-```sql
-CREATE DATABASE DSS_CarAdvisor;
-```
-
-### 3.2) Dùng SQLite (chạy nhanh để demo)
+Ví dụ:
 
 ```ini
-DATABASE_URL=sqlite:///dss.sqlite3
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/dss_car_advisor
+```
+
+Tạo database:
+
+```powershell
+psql -U postgres -h localhost -p 5432 -d postgres -c "CREATE DATABASE dss_car_advisor;"
+```
+
+Khởi tạo bảng + dữ liệu mẫu:
+
+```powershell
+psql -U postgres -h localhost -p 5432 -d dss_car_advisor -f .\postgres_init.sql
 ```
 
 ## 4) Huấn luyện AI (train)
@@ -155,7 +153,7 @@ waitress-serve --listen=0.0.0.0:5002 --call app:create_app
 
 ## 8) Troubleshooting nhanh
 
-- Nếu lỗi kết nối SQL Server: kiểm tra cài ODBC Driver, tên driver trong connection string, và quyền truy cập DB.
+- Nếu lỗi kết nối PostgreSQL: kiểm tra service PostgreSQL đang chạy, user/password đúng, và database đã tạo.
 - Nếu file `models/car_advisor_rf.pkl` chưa có: chạy lại bước (4) hoặc dùng Admin → Retrain.
 
 ## 9) Chạy bằng 1 lệnh (tuỳ chọn)

@@ -39,7 +39,7 @@ Bạn nên đổi ngay sau khi chạy.
 
 - Flask, Jinja2
 - scikit-learn (RandomForestClassifier/Regressor)
-- SQLAlchemy + pyodbc (SQL Server) *(có fallback SQLite cho dev)*
+- SQLAlchemy + PostgreSQL (psycopg)
 
 ## Tài liệu chạy dự án
 
