@@ -15,6 +15,16 @@ class Settings:
     model_path: str
 
 
+def _normalize_database_url(url: str) -> str:
+    s = str(url or "").strip()
+    if s.startswith("postgres://"):
+        # Render may provide postgres://...; normalize for SQLAlchemy 2.x.
+        return "postgresql+psycopg://" + s[len("postgres://"):]
+    if s.startswith("postgresql://") and not s.startswith("postgresql+psycopg://"):
+        return "postgresql+psycopg://" + s[len("postgresql://"):]
+    return s
+
+
 def get_settings() -> Settings:
     # On Render, rely on dashboard environment variables instead of a committed local .env file.
     is_render = str(os.getenv("RENDER", "")).strip().lower() in {"1", "true", "yes", "on"}
@@ -25,7 +35,7 @@ def get_settings() -> Settings:
 
     # SECURITY: never commit your real `.env` file.
     # Put secrets in `.env` locally and keep `.env.example` as a template.
-    database_url_env = os.getenv("DATABASE_URL")
+    database_url_env = _normalize_database_url(os.getenv("DATABASE_URL", ""))
     if database_url_env and str(database_url_env).startswith("postgresql"):
         try:
             import psycopg  # noqa: F401
